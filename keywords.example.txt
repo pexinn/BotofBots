@@ -1,0 +1,16 @@
+# ========================================================
+# LISTA DE PALAVRAS-CHAVE MONITORADAS
+# ========================================================
+# Adicione um termo por linha. Linhas iniciadas com '#' sao ignoradas.
+# O motor de busca inteligente encontra a mensagem se TODAS as palavras
+# daquela linha estiverem presentes, independente da ordem, e normaliza
+# capacidades de hardware (ex: '1tb' encontra '1 tb' e vice-versa).
+#
+# DICA: Crie seu arquivo 'keywords.txt' a partir deste exemplo.
+# Qualquer edicao no 'keywords.txt' e recarregada automaticamente
+# pelo bot em tempo real, sem necessidade de reiniciar o container!
+
+ssd nvme 1tb
+rtx 4060
+ryzen 7 5700x3d
+monitor 144hz

@@ -1,0 +1,11 @@
+services:
+  telegram-deal-bot:
+    build: .
+    container_name: telegram-deal-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app
