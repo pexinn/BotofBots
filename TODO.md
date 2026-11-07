@@ -72,5 +72,66 @@ Este documento reúne ideias, melhorias e evolução arquitetural para o **Bot o
 
 ---
 
+## 👥 Prioridade Alta: Como Disponibilizar para Outras Pessoas
+
+Atualmente o bot roda para você. Existem **3 caminhos principais** para disponibilizar essa solução para amigos, família ou para o público em geral:
+
+---
+
+### 1. Modelo "Bot Centralizado Multi-Usuário" (Recomendado ⭐⭐⭐⭐⭐)
+> **Como funciona:** O seu Homelab/VPS continua sendo a "central" que escuta todos os canais de ofertas com o Telethon. Qualquer pessoa simplesmente abre o bot no Telegram e escolhe o que quer receber no privado dela!
+
+```mermaid
+flowchart TD
+    A["📢 Dezenas de Grupos/Canais de Promoções"] -->|Monitoramento Único| B["🖥️ Central Bot of Bots (Seu Servidor)"]
+    B -->|Avalia Termos Cadastrados| C[("💾 Banco SQLite / Mongo<br/>Usuários & Palavras")]
+    C -->|Filtro de Preferências| D["🤖 @ofertas_pessoais_ander_bot"]
+    D -->|"🚨 Alerta SSD 1TB"| E["📱 Amigo A (@usuario1)"]
+    D -->|"🚨 Alerta RTX 4060"| F["📱 Amigo B (@usuario2)"]
+    D -->|"🚨 Alerta Monitor 144Hz"| G["📱 Amigo C (@usuario3)"]
+```
+
+- **Vantagem para os outros:** Ninguém precisa de API do Telegram, nem de servidor, nem de Docker. Eles só dão `/start` no bot e pronto.
+- [ ] **Banco de Dados de Inscrições (SQLite ou MongoDB):**
+  - Tabela `usuarios`: `chat_id`, `username`, `data_cadastro`, `ativo`.
+  - Tabela `termos_usuario`: `id`, `chat_id`, `termo`, `preco_maximo`.
+- [ ] **Fluxo do Usuário no Telegram:**
+  - Usuário manda `/start` para o bot.
+  - Comandos disponíveis para qualquer usuário:
+    - `/alerta <termo>`: Adiciona um produto que ele quer vigiar (ex: `/alerta rtx 4060`).
+    - `/meusalertas`: Lista os termos que ele cadastrou com opção de apagar.
+    - `/remover <termo>`: Remove um alerta dele.
+- [ ] **Motor de Distribuição Segmentada:**
+  - Quando uma oferta cai na central, o bot varre quais usuários têm interesse naquele termo e despacha o alerta no privado de cada um individualmente!
+- [ ] **Controle de Limites:**
+  - Limite de $X$ alertas por usuário para evitar abusos (ex: máximo de 5 palavras para amigos).
+
+---
+
+### 2. Modelo "Canais Temáticos por Categoria" (Zero Configuração para Amigos)
+> **Como funciona:** Você cria canais públicos ou privados temáticos e qualquer pessoa apenas entra no canal de interesse dela.
+
+- [ ] **Exemplo de Canais:**
+  - `🚨 Alertas - Hardware & PC` (SSD, GPU, CPU, RAM, Fontes)
+  - `🚨 Alertas - Periféricos` (Mouses, Teclados, Headsets, Monitores)
+  - `🚨 Alertas - Games & Consoles` (PS5, Xbox, Switch, Jogos)
+- [ ] O bot classifica as ofertas por categoria e posta no canal correspondente.
+- [ ] Amigos só precisam clicar no link de convite do canal que quiserem acompanhar.
+
+---
+
+### 3. Modelo "Self-Hosted 1-Click" (Para outros Devs / Homelabbers)
+> **Como funciona:** Permitir que qualquer pessoa que tenha um Homelab ou VPS rode a sua própria instância do projeto em 1 minuto.
+
+- [ ] **GitHub Container Registry (GHCR):**
+  - Configurar GitHub Actions para gerar e publicar a imagem automaticamente: `ghcr.io/pexinn/botofbots:latest`.
+- [ ] **Template 1-Click para Portainer / CasaOS / Unraid:**
+  - Criar um `docker-compose.yml` simplificado ou template com campos de formulário para preencher `.env`.
+- [ ] **Script de Inicialização Automática (`setup.sh` / `setup.bat`):**
+  - Um script que roda interativamente: pergunta `API_ID`, `API_HASH`, gera a StringSession e já sobe o Docker sem o usuário digitar código.
+
+---
+
 ## 📌 Como Contribuir ou Priorizar
 Para implementar qualquer uma dessas ideias, basta abrir uma branch a partir de `main` e submeter um Pull Request ou aplicar diretamente no Homelab!
+
