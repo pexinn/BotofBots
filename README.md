@@ -59,10 +59,21 @@ BotofBots/
 ├── requirements.txt        # Dependências Python (Telethon)
 ├── keywords.example.txt    # Modelo de lista de termos monitorados
 ├── bot.py                  # Aplicação principal do bot
+├── TODO.md                 # Roadmap e backlog de melhorias futuras
 └── scripts/
     ├── gerar_sessao.py     # Gerador interativo da StringSession Telethon
     └── listar_chats.py     # Utilitário para listar IDs de canais/grupos
 ```
+
+---
+
+## 📋 Roadmap & Próximas Melhorias
+
+Consulte o arquivo [TODO.md](TODO.md) para ver as ideias em andamento, incluindo:
+- 📱 **Gestão de termos via chat no Telegram** (`/add`, `/del`, `/list`) direto do celular.
+- 🌐 **Mini Dashboard Web no Homelab** (interface visual para gerenciar palavras e ver histórico).
+- 🏷️ **Filtro de preço teto** (ex: `ssd nvme 1tb <= 380`).
+- 🛡️ **Deduplicação de ofertas e anti-spam**.
 
 ---
 
@@ -206,3 +217,4 @@ Você **NÃO precisa reiniciar o container** para mudar as palavras monitoradas.
 ## 📄 Licença
 
 Distribuído sob a licença MIT. Sinta-se livre para customizar e adaptar para seus próprios canais e filtros de ofertas!
+
