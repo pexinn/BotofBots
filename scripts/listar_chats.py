@@ -33,3 +33,4 @@ print("\n" + "=" * 60)
 print("Para usar um canal como destino dos alertas, copie o ID com o sinal de menos")
 print("Exemplo: -1001234567890 e cole em ALERT_DESTINATION no seu .env")
 print("=" * 60)
+

@@ -44,3 +44,4 @@ with TelegramClient(StringSession(), api_id, api_hash) as client:
         print("\nSessão também salva temporariamente no arquivo 'string_session.txt'.")
     except Exception:
         pass
+

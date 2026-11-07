@@ -14,3 +14,4 @@ ssd nvme 1tb
 rtx 4060
 ryzen 7 5700x3d
 monitor 144hz
+
