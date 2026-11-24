@@ -382,6 +382,7 @@ def create_app(
         channel: str | None = None,
         max_price: float | None = None,
         search: str | None = None,
+        status: str | None = None,
     ) -> dict[str, Any]:
         deals = db.list_deals(
             limit=limit,
@@ -390,6 +391,7 @@ def create_app(
             channel=channel,
             max_price=max_price,
             search=search,
+            status=status,
         )
         return {"deals": deals}
 

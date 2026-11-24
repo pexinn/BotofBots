@@ -62,7 +62,20 @@ def test_web_dashboard_crud_and_analytics(tmp_path):
 
     # Deals & Analytics
     db.record_deal("ssd nvme 1tb", "ssd nvme 1tb -kootion <= 380", "Adrenaline", "SSD NVMe 1TB", price=349.9)
-    assert len(client.get("/api/deals").json()["deals"]) == 1
+    db.record_deal(
+        "ssd nvme 1tb",
+        "ssd nvme 1tb -kootion <= 380",
+        "Pelando",
+        "SSD NVMe 1TB R$ 599",
+        price=599.0,
+        status="blocked_price",
+        block_reason="Preço R$ 599.00 acima do teto <= R$ 380.00",
+    )
+    assert len(client.get("/api/deals").json()["deals"]) == 2
+    assert len(client.get("/api/deals?status=sent").json()["deals"]) == 1
+    blocked_list = client.get("/api/deals?status=blocked").json()["deals"]
+    assert len(blocked_list) == 1
+    assert blocked_list[0]["status"] == "blocked_price"
     assert client.get("/api/analytics/prices").json()["summary"]["min_price"] == 349.9
     assert client.get("/api/analytics/channels").json()["channels"][0]["channel_name"] == "Adrenaline"
 

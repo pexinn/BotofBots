@@ -96,3 +96,48 @@ def test_multi_user_limit_enforcement(tmp_path):
     assert removed is not None
     assert len(db.list_user_terms(111)) == 1
     db.close()
+
+
+def test_deals_schema_migration_preserves_rows(tmp_path):
+    import sqlite3
+
+    db_file = str(tmp_path / "legacy.db")
+    conn = sqlite3.connect(db_file)
+    conn.execute(
+        """
+        CREATE TABLE deals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            term TEXT NOT NULL,
+            matched_rule TEXT NOT NULL,
+            channel_name TEXT NOT NULL,
+            channel_username TEXT,
+            message_id INTEGER,
+            message_link TEXT,
+            price REAL,
+            category TEXT,
+            raw_text TEXT NOT NULL,
+            canonical_url TEXT,
+            is_duplicate INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO deals (term, matched_rule, channel_name, raw_text, is_duplicate, created_at) "
+        "VALUES ('ssd', 'ssd', 'Canal A', 'SSD 1TB', 0, '2026-11-24T10:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO deals (term, matched_rule, channel_name, raw_text, is_duplicate, created_at) "
+        "VALUES ('ssd', 'ssd', 'Canal B', 'SSD 1TB dup', 1, '2026-11-24T10:05:00Z')"
+    )
+    conn.commit()
+    conn.close()
+
+    db = Database(db_file)
+    sent = db.list_deals(status="sent")
+    blocked = db.list_deals(status="blocked")
+    assert len(sent) == 1
+    assert sent[0]["channel_name"] == "Canal A"
+    assert len(blocked) == 1
+    assert blocked[0]["status"] == "blocked_dedup"
+    db.close()

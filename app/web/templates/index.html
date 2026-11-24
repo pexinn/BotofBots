@@ -79,8 +79,11 @@
         <p class="text-2xl font-bold text-emerald-400 mt-1" x-text="status.today?.alerts_sent ?? 0"></p>
         <p class="text-[11px] text-slate-500 mt-1">Total: <span x-text="status.totals?.alerts_sent ?? 0"></span></p>
       </div>
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-        <p class="text-xs text-slate-400">Bloqueios Inteligentes (Hoje)</p>
+      <div @click="openBlockedDeals()" class="bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-4 cursor-pointer transition group">
+        <div class="flex items-center justify-between">
+          <p class="text-xs text-slate-400">Bloqueios Inteligentes (Hoje)</p>
+          <span class="text-[10px] text-amber-400/80 group-hover:text-amber-300">Ver bloqueios →</span>
+        </div>
         <p class="text-2xl font-bold text-amber-400 mt-1"
            x-text="(status.today?.blacklist_blocked ?? 0) + (status.today?.price_blocked ?? 0) + (status.today?.dedup_blocked ?? 0)"></p>
         <p class="text-[11px] text-slate-500 mt-1">
@@ -240,6 +243,17 @@
                  class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white" />
         </div>
         <div>
+          <label class="block text-xs text-slate-400 mb-1">Status</label>
+          <select x-model="dealFilter.status" @change="loadDeals()" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white">
+            <option value="">Todos</option>
+            <option value="sent">✅ Enviados</option>
+            <option value="blocked">🛑 Todos Bloqueados</option>
+            <option value="blocked_price">💰 Bloqueio de Preço</option>
+            <option value="blocked_blacklist">🚫 Marca / Blacklist</option>
+            <option value="blocked_dedup">🔁 Duplicados</option>
+          </select>
+        </div>
+        <div>
           <label class="block text-xs text-slate-400 mb-1">Categoria</label>
           <select x-model="dealFilter.category" @change="loadDeals()" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white">
             <option value="">Todas</option>
@@ -264,30 +278,39 @@
             <thead class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
               <tr>
                 <th class="px-4 py-3">Data</th>
+                <th class="px-4 py-3">Status / Motivo</th>
                 <th class="px-4 py-3">Termo</th>
                 <th class="px-4 py-3">Preço</th>
-                <th class="px-4 py-3">Categoria</th>
                 <th class="px-4 py-3">Canal</th>
-                <th class="px-4 py-3">Oferta</th>
+                <th class="px-4 py-3">Oferta (clique p/ expandir)</th>
                 <th class="px-4 py-3">Link</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/70">
               <template x-for="d in deals" :key="d.id">
-                <tr class="hover:bg-slate-800/30">
+                <tr class="hover:bg-slate-800/30 align-top">
                   <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" x-text="formatDate(d.created_at)"></td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold border"
+                          :class="statusClass(d.status)"
+                          x-text="statusLabel(d.status)"></span>
+                    <p x-show="d.block_reason" class="text-[11px] text-slate-400 mt-1 max-w-[220px] whitespace-normal" x-text="d.block_reason"></p>
+                  </td>
                   <td class="px-4 py-3 font-medium text-indigo-300">
                     <span x-text="d.term"></span>
-                    <span x-show="d.is_duplicate" class="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-slate-800 text-slate-400">dup</span>
+                    <p x-show="d.category" class="text-[11px] text-slate-500" x-text="d.category"></p>
                   </td>
                   <td class="px-4 py-3 whitespace-nowrap">
                     <span x-show="d.price !== null" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300"
                           x-text="'R$ ' + Number(d.price).toFixed(2)"></span>
                     <span x-show="d.price === null" class="text-xs text-slate-500">—</span>
                   </td>
-                  <td class="px-4 py-3 text-xs text-slate-300" x-text="d.category || '—'"></td>
                   <td class="px-4 py-3 text-xs text-slate-300" x-text="d.channel_name"></td>
-                  <td class="px-4 py-3 text-xs text-slate-300 max-w-md truncate" x-text="d.raw_text"></td>
+                  <td @click="expandedDealId = (expandedDealId === d.id ? null : d.id)"
+                      class="px-4 py-3 text-xs text-slate-300 max-w-md cursor-pointer"
+                      :class="expandedDealId === d.id ? 'whitespace-pre-wrap break-words' : 'truncate'">
+                    <span x-text="d.raw_text"></span>
+                  </td>
                   <td class="px-4 py-3 whitespace-nowrap">
                     <a x-show="d.message_link" :href="d.message_link" target="_blank" class="text-xs text-indigo-400 hover:underline">Abrir ↗</a>
                     <span x-show="!d.message_link" class="text-xs text-slate-600">—</span>
@@ -295,7 +318,7 @@
                 </tr>
               </template>
               <tr x-show="deals.length === 0">
-                <td colspan="7" class="px-4 py-8 text-center text-slate-500 text-sm">Nenhuma oferta registrada ainda.</td>
+                <td colspan="7" class="px-4 py-8 text-center text-slate-500 text-sm">Nenhuma oferta registrada para este filtro.</td>
               </tr>
             </tbody>
           </table>
@@ -702,7 +725,8 @@
         ],
         newBlacklistWord: '',
         runtimeSettings: { dedup_window_minutes: 30, require_price_for_cap: true },
-        dealFilter: { search: '', category: '', max_price: '' },
+        dealFilter: { search: '', category: '', max_price: '', status: '' },
+        expandedDealId: null,
         analyticsFilter: { term: '', days: 30 },
         chartInstance: null,
 
@@ -936,8 +960,29 @@
           if (this.dealFilter.search) params.set('search', this.dealFilter.search);
           if (this.dealFilter.category) params.set('category', this.dealFilter.category);
           if (this.dealFilter.max_price) params.set('max_price', this.dealFilter.max_price);
+          if (this.dealFilter.status) params.set('status', this.dealFilter.status);
           const res = await this.api('/api/deals?' + params.toString());
           this.deals = res.deals;
+        },
+
+        async openBlockedDeals() {
+          this.tab = 'deals';
+          this.dealFilter.status = 'blocked';
+          await this.loadDeals();
+        },
+
+        statusLabel(st) {
+          if (st === 'blocked_price') return '💰 Preço';
+          if (st === 'blocked_blacklist') return '🚫 Marca';
+          if (st === 'blocked_dedup') return '🔁 Duplicada';
+          return '✅ Enviado';
+        },
+
+        statusClass(st) {
+          if (st === 'blocked_price') return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+          if (st === 'blocked_blacklist') return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+          if (st === 'blocked_dedup') return 'bg-slate-800 text-slate-300 border-slate-700';
+          return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
         },
 
         async loadAnalytics() {

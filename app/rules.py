@@ -253,6 +253,29 @@ def evaluate_rule(
     return True, None
 
 
+def find_blocked_word(
+    rule: ParsedRule,
+    text: str,
+    global_blacklist: Iterable[str] = (),
+) -> str | None:
+    """Return the first negative or global blacklist word that blocked `text`, if any."""
+    if not text:
+        return None
+    norm_text = strip_accents(text)
+
+    candidates: list[str] = list(rule.negatives)
+    for g in global_blacklist:
+        clean_g = g.strip().lstrip("-!").lower()
+        if clean_g and clean_g not in candidates:
+            candidates.append(clean_g)
+
+    for word in candidates:
+        norm_word = strip_accents(word)
+        if norm_word and re.search(rf"\b{re.escape(norm_word)}\b", norm_text, re.IGNORECASE):
+            return word
+    return None
+
+
 def extract_price(text: str) -> float | None:
     """
     Extract the lowest main BRL price from a deal message, ignoring installments,

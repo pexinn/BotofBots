@@ -92,6 +92,8 @@ class Database:
                 raw_text TEXT NOT NULL,
                 canonical_url TEXT,
                 is_duplicate INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'sent',
+                block_reason TEXT,
                 created_at TEXT NOT NULL
             );
 
@@ -136,7 +138,24 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_dedup_seen ON dedup_cache(first_seen_at);
             """
         )
+        self._migrate_schema()
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status)")
         self._conn.commit()
+
+    def _migrate_schema(self) -> None:
+        cols = {
+            str(r["name"])
+            for r in self._conn.execute("PRAGMA table_info(deals)").fetchall()
+        }
+        if "status" not in cols:
+            self._conn.execute(
+                "ALTER TABLE deals ADD COLUMN status TEXT NOT NULL DEFAULT 'sent'"
+            )
+            self._conn.execute(
+                "UPDATE deals SET status = 'blocked_dedup' WHERE is_duplicate = 1 AND status = 'sent'"
+            )
+        if "block_reason" not in cols:
+            self._conn.execute("ALTER TABLE deals ADD COLUMN block_reason TEXT")
 
     def close(self) -> None:
         with self._lock:
@@ -523,6 +542,8 @@ class Database:
         category: str | None = None,
         canonical_url: str | None = None,
         is_duplicate: bool = False,
+        status: str = "sent",
+        block_reason: str | None = None,
         created_at: str | None = None,
     ) -> int:
         ts = created_at or _utc_iso()
@@ -531,8 +552,9 @@ class Database:
                 """
                 INSERT INTO deals (
                     term, matched_rule, channel_name, channel_username, message_id,
-                    message_link, price, category, raw_text, canonical_url, is_duplicate, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    message_link, price, category, raw_text, canonical_url,
+                    is_duplicate, status, block_reason, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     term,
@@ -546,6 +568,8 @@ class Database:
                     raw_text,
                     canonical_url,
                     1 if is_duplicate else 0,
+                    status,
+                    block_reason,
                     ts,
                 ),
             )
@@ -560,6 +584,7 @@ class Database:
         channel: str | None = None,
         max_price: float | None = None,
         search: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         clauses = ["1=1"]
         params: list[Any] = []
@@ -576,9 +601,16 @@ class Database:
             clauses.append("price IS NOT NULL AND price <= ?")
             params.append(max_price)
         if search:
-            clauses.append("(LOWER(raw_text) LIKE LOWER(?) OR LOWER(term) LIKE LOWER(?))")
+            clauses.append("(LOWER(raw_text) LIKE LOWER(?) OR LOWER(term) LIKE LOWER(?) OR LOWER(COALESCE(block_reason, '')) LIKE LOWER(?))")
             like = f"%{search.strip()}%"
-            params.extend([like, like])
+            params.extend([like, like, like])
+        if status:
+            st = status.strip().lower()
+            if st == "blocked":
+                clauses.append("COALESCE(status, 'sent') != 'sent'")
+            elif st in {"sent", "blocked_price", "blocked_blacklist", "blocked_dedup"}:
+                clauses.append("COALESCE(status, 'sent') = ?")
+                params.append(st)
 
         params.append(max(1, min(limit, 500)))
         sql = f"SELECT * FROM deals WHERE {' AND '.join(clauses)} ORDER BY id DESC LIMIT ?"
@@ -598,6 +630,8 @@ class Database:
                     "raw_text": r["raw_text"],
                     "canonical_url": r["canonical_url"],
                     "is_duplicate": bool(r["is_duplicate"]),
+                    "status": r["status"] or "sent",
+                    "block_reason": r["block_reason"],
                     "created_at": r["created_at"],
                 }
                 for r in rows
@@ -605,7 +639,11 @@ class Database:
 
     def get_price_history(self, term: str | None = None, days: int = 30) -> dict[str, Any]:
         cutoff_iso = _utc_iso(_utc_now() - timedelta(days=max(1, days)))
-        clauses = ["price IS NOT NULL", "created_at >= ?"]
+        clauses = [
+            "price IS NOT NULL",
+            "created_at >= ?",
+            "COALESCE(status, 'sent') NOT IN ('blocked_blacklist', 'blocked_price')",
+        ]
         params: list[Any] = [cutoff_iso]
         if term:
             clauses.append("LOWER(term) = LOWER(?)")
@@ -660,6 +698,7 @@ class Database:
                     MAX(created_at) AS last_deal_at
                 FROM deals
                 WHERE created_at >= ?
+                  AND COALESCE(status, 'sent') NOT IN ('blocked_blacklist', 'blocked_price')
                 GROUP BY channel_name
                 ORDER BY first_hits DESC, total_deals DESC
                 """,

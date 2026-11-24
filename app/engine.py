@@ -15,6 +15,7 @@ from app.rules import (
     evaluate_rule,
     extract_canonical_urls,
     extract_price,
+    find_blocked_word,
     parse_rule,
     strip_accents,
 )
@@ -148,12 +149,53 @@ class DealEngine:
             matched, block_reason = evaluate_rule(rule, raw_text, global_blacklist)
             if block_reason == "blacklist":
                 self.db.increment_stat("blacklist_blocked")
+                blocked_word = find_blocked_word(rule, raw_text, global_blacklist)
+                reason_txt = (
+                    f"Marca/termo bloqueado: -{blocked_word}"
+                    if blocked_word
+                    else "Bloqueado pela blacklist"
+                )
+                self.db.record_deal(
+                    term=rule.term,
+                    matched_rule=kw["raw_line"],
+                    channel_name=chat_name,
+                    channel_username=chat_username,
+                    message_id=message_id,
+                    message_link=message_link,
+                    price=price,
+                    category=category,
+                    raw_text=raw_text,
+                    canonical_url=canonical_urls[0] if canonical_urls else None,
+                    is_duplicate=False,
+                    status="blocked_blacklist",
+                    block_reason=reason_txt,
+                )
                 continue
             if not matched:
                 continue
 
             if not self._check_price_cap(rule.max_price, rule.strict_lt, price, require_price_cap):
                 self.db.increment_stat("price_blocked")
+                op = "<" if rule.strict_lt else "<="
+                if price is None:
+                    reason_txt = f"Sem preço detectado (teto {op} R$ {rule.max_price:.2f})"
+                else:
+                    reason_txt = f"Preço R$ {price:.2f} acima do teto {op} R$ {rule.max_price:.2f}"
+                self.db.record_deal(
+                    term=rule.term,
+                    matched_rule=kw["raw_line"],
+                    channel_name=chat_name,
+                    channel_username=chat_username,
+                    message_id=message_id,
+                    message_link=message_link,
+                    price=price,
+                    category=category,
+                    raw_text=raw_text,
+                    canonical_url=canonical_urls[0] if canonical_urls else None,
+                    is_duplicate=False,
+                    status="blocked_price",
+                    block_reason=reason_txt,
+                )
                 continue
 
             fps = compute_deal_fingerprints(raw_text, rule.term, price, canonical_urls)
@@ -173,6 +215,8 @@ class DealEngine:
                     raw_text=raw_text,
                     canonical_url=canonical_urls[0] if canonical_urls else None,
                     is_duplicate=True,
+                    status="blocked_dedup",
+                    block_reason=f"Oferta duplicada na janela de {dedup_window} min",
                 )
                 break
 

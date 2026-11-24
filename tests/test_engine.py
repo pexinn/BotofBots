@@ -78,7 +78,13 @@ async def test_engine_kootion_exclusion_and_price_cap(tmp_path):
     destinations = [d for d, _ in sent_messages]
     assert -100999 in destinations
     assert -100111 in destinations
-    assert len(db.list_deals()) == 1
+    assert len(db.list_deals(status="sent")) == 1
+    bl_deals = db.list_deals(status="blocked_blacklist")
+    assert len(bl_deals) == 2
+    assert any("kootion" in (d["block_reason"] or "") for d in bl_deals)
+    price_deals = db.list_deals(status="blocked_price")
+    assert len(price_deals) == 1
+    assert "420.00" in (price_deals[0]["block_reason"] or "")
 
     # 5. Duplicate Amazon ASIN from another channel within 30 min -> blocked by dedup
     sent_messages.clear()
@@ -91,6 +97,8 @@ async def test_engine_kootion_exclusion_and_price_cap(tmp_path):
     )
     assert -100999 not in [d for d, _ in sent_messages]
     assert db.get_today_stats()["dedup_blocked"] == 1
+    assert len(db.list_deals(status="blocked_dedup")) == 1
+    assert len(db.list_deals(status="blocked")) == 4
     db.close()
 
 
