@@ -114,3 +114,20 @@ def test_canonicalize_urls_and_fingerprints():
 def test_format_rule_line_roundtrip():
     line = format_rule_line("ssd nvme 1tb", ["kootion", "sata"], 380.0, False)
     assert line == "ssd nvme 1tb -kootion -sata <= 380"
+
+
+def test_accent_insensitive_matching():
+    rule_accented = parse_rule("Tênis Vans")
+    assert rule_accented is not None
+    assert evaluate_rule(rule_accented, "Promocao Tenis Vans Old Skool")[0] is True
+    assert evaluate_rule(rule_accented, "TÊNIS VANS")[0] is True
+
+    rule_plain = parse_rule("tenis vans")
+    assert rule_plain is not None
+    assert evaluate_rule(rule_plain, "Tênis Vans Old Skool")[0] is True
+
+    rule_rtx = parse_rule("rtx 4060")
+    assert rule_rtx is not None
+    matched, reason = evaluate_rule(rule_rtx, "Leilão RTX 4060", global_blacklist=["leilao"])
+    assert matched is False
+    assert reason == "blacklist"

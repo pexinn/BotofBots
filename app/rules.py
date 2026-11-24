@@ -4,9 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Iterable
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+
+def strip_accents(text: str) -> str:
+    """Remove diacritics/accents from text for accent-insensitive matching."""
+    if not text:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in nfkd if not unicodedata.combining(ch))
 
 _UNIT_TOKEN_RE = re.compile(r"^(\d+)(tb|gb|mb|hz|w)$", re.IGNORECASE)
 _PRICE_CAP_RE = re.compile(r"(<=|<)\s*(?:R\$\s*)?([\d.,]+)", re.IGNORECASE)
@@ -117,11 +126,12 @@ def parse_price_value(raw_num: str) -> float | None:
 
 
 def _build_positive_pattern(token: str) -> str:
-    m_cap = _UNIT_TOKEN_RE.match(token)
+    norm = strip_accents(token)
+    m_cap = _UNIT_TOKEN_RE.match(norm)
     if m_cap:
         num, unit = m_cap.groups()
         return rf"(?=.*\b{re.escape(num)}\s*{re.escape(unit)}\b)"
-    return rf"(?=.*\b{re.escape(token)}\b)"
+    return rf"(?=.*\b{re.escape(norm)}\b)"
 
 
 def parse_rule(raw_line: str) -> ParsedRule | None:
@@ -173,7 +183,7 @@ def parse_rule(raw_line: str) -> ParsedRule | None:
 
     term = " ".join(positives)
     pos_patterns = "".join(_build_positive_pattern(p) for p in positives)
-    neg_patterns = "".join(rf"(?!.*\b{re.escape(n)}\b)" for n in negatives)
+    neg_patterns = "".join(rf"(?!.*\b{re.escape(strip_accents(n))}\b)" for n in negatives)
 
     try:
         positive_regex = re.compile(f"^{pos_patterns}", re.IGNORECASE | re.DOTALL)
@@ -219,24 +229,25 @@ def evaluate_rule(
     global_blacklist: Iterable[str] = (),
 ) -> tuple[bool, str | None]:
     """
-    Evaluate a rule against message text.
+    Evaluate a rule against message text (case- and accent-insensitive).
     Returns (matched, block_reason) where block_reason is 'blacklist' if positives matched
     but a rule-level negative or global blacklist word blocked it.
     """
     if rule.is_global_blacklist or rule.positive_regex is None or not text:
         return False, None
 
-    if not rule.positive_regex.search(text):
+    norm_text = strip_accents(text)
+    if not rule.positive_regex.search(norm_text):
         return False, None
 
-    combined_negatives: list[str] = list(rule.negatives)
+    combined_negatives: list[str] = [strip_accents(n) for n in rule.negatives if n]
     for g in global_blacklist:
-        clean_g = g.strip().lstrip("-!").lower()
+        clean_g = strip_accents(g.strip().lstrip("-!").lower())
         if clean_g and clean_g not in combined_negatives:
             combined_negatives.append(clean_g)
 
     for neg in combined_negatives:
-        if re.search(rf"\b{re.escape(neg)}\b", text, re.IGNORECASE):
+        if re.search(rf"\b{re.escape(neg)}\b", norm_text, re.IGNORECASE):
             return False, "blacklist"
 
     return True, None

@@ -16,6 +16,7 @@ from app.rules import (
     extract_canonical_urls,
     extract_price,
     parse_rule,
+    strip_accents,
 )
 
 
@@ -241,8 +242,9 @@ class DealEngine:
         # 3. Thematic Channels
         matched_channels = match_thematic_channels(raw_text, channels)
         if matched_channels:
+            norm_text = strip_accents(raw_text)
             blocked_by_global = any(
-                re.search(rf"\b{re.escape(g)}\b", raw_text, re.IGNORECASE)
+                re.search(rf"\b{re.escape(strip_accents(g))}\b", norm_text, re.IGNORECASE)
                 for g in global_blacklist
                 if g
             )

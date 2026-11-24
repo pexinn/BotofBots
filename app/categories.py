@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.rules import strip_accents
+
 DEFAULT_THEMATIC_CATEGORIES: list[dict[str, Any]] = [
     {
         "slug": "hardware",
@@ -73,11 +75,12 @@ DEFAULT_THEMATIC_CATEGORIES: list[dict[str, Any]] = [
 def _matches_any_keyword(text: str, keywords: list[str]) -> bool:
     if not text or not keywords:
         return False
+    norm_text = strip_accents(text)
     for kw in keywords:
-        clean_kw = kw.strip()
+        clean_kw = strip_accents(kw.strip())
         if not clean_kw:
             continue
-        if re.search(rf"\b{re.escape(clean_kw)}\b", text, re.IGNORECASE):
+        if re.search(rf"\b{re.escape(clean_kw)}\b", norm_text, re.IGNORECASE):
             return True
     return False
 
