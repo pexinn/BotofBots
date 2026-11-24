@@ -248,6 +248,7 @@ class Database:
         clear_max_price: bool = False,
         negatives: list[str] | None = None,
         strict_lt: bool | None = None,
+        term: str | None = None,
     ) -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute("SELECT * FROM keywords WHERE id = ?", (kw_id,)).fetchone()
@@ -255,6 +256,14 @@ class Database:
                 return None
 
             current = self._row_to_keyword(row)
+            if term is not None:
+                parsed_term = parse_rule(term)
+                if parsed_term is None or parsed_term.is_global_blacklist or not parsed_term.term:
+                    raise ValueError("Termo inválido. Informe pelo menos uma palavra-chave positiva.")
+                new_term = parsed_term.term
+            else:
+                new_term = current["term"]
+
             new_enabled = current["enabled"] if enabled is None else enabled
             new_negatives = current["negatives"] if negatives is None else [
                 n.strip().lstrip("-!").lower() for n in negatives if n.strip()
@@ -267,12 +276,13 @@ class Database:
             else:
                 new_max_price = current["max_price"]
 
-            new_raw = format_rule_line(current["term"], new_negatives, new_max_price, new_strict)
+            new_raw = format_rule_line(new_term, new_negatives, new_max_price, new_strict)
             self._conn.execute(
-                "UPDATE keywords SET raw_line = ?, negatives = ?, max_price = ?, strict_lt = ?, enabled = ? "
+                "UPDATE keywords SET raw_line = ?, term = ?, negatives = ?, max_price = ?, strict_lt = ?, enabled = ? "
                 "WHERE id = ?",
                 (
                     new_raw,
+                    new_term,
                     json.dumps(new_negatives),
                     new_max_price,
                     1 if new_strict else 0,

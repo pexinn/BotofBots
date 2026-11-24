@@ -77,6 +77,72 @@ def test_web_dashboard_crud_and_analytics(tmp_path):
     db.close()
 
 
+def test_web_edit_keyword_guide_and_simulator(tmp_path):
+    cfg = _make_settings(tmp_path)
+    db = Database(cfg.db_path)
+    db.seed_thematic_channels({})
+    sync = KeywordsSyncManager(db, cfg.keywords_file, cfg.keywords_example_file)
+    app = create_app(db, sync, cfg)
+    client = TestClient(app)
+
+    # Interactive guide route
+    assert client.get("/guia").status_code == 200
+
+    # Create uncapped keyword and edit it in place to add max_price=1000 & -kootion
+    created = client.post("/api/keywords", json={"term": "ssd nvme 1tb"}).json()["keyword"]
+    patched = client.patch(
+        f"/api/keywords/{created['id']}",
+        json={"negatives": ["kootion"], "max_price": 1000},
+    )
+    assert patched.status_code == 200
+    kw = patched.json()["keyword"]
+    assert kw["max_price"] == 1000.0
+    assert kw["negatives"] == ["kootion"]
+    assert "ssd nvme 1tb -kootion <= 1000" in open(cfg.keywords_file, encoding="utf-8").read()
+
+    # Clear max_price via PATCH
+    cleared = client.patch(
+        f"/api/keywords/{created['id']}",
+        json={"clear_max_price": True},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["keyword"]["max_price"] is None
+
+    # Simulator endpoint tests
+    sim_ok = client.post(
+        "/api/simulate",
+        json={
+            "rule": "ssd nvme 1tb -kootion <= 1000",
+            "sample_message": "SSD Kingston NVMe 1TB por R$ 899,90",
+        },
+    ).json()
+    assert sim_ok["would_alert"] is True
+    assert sim_ok["reason"] == "matched"
+    assert sim_ok["detected_price"] == 899.9
+
+    sim_bl = client.post(
+        "/api/simulate",
+        json={
+            "rule": "ssd nvme 1tb -kootion <= 1000",
+            "sample_message": "SSD NVMe 1TB Kootion por R$ 289,90",
+        },
+    ).json()
+    assert sim_bl["would_alert"] is False
+    assert sim_bl["reason"] == "blacklist"
+
+    sim_cap = client.post(
+        "/api/simulate",
+        json={
+            "rule": "ssd nvme 1tb -kootion <= 1000",
+            "sample_message": "SSD NVMe 1TB - De R$ 2.000,00 por R$ 1.200,00 (Economia de R$ 800,00)",
+        },
+    ).json()
+    assert sim_cap["would_alert"] is False
+    assert sim_cap["reason"] == "price_above_cap"
+    assert sim_cap["detected_price"] == 1200.0
+    db.close()
+
+
 def test_web_dashboard_password_auth(tmp_path):
     cfg = _make_settings(tmp_path, web_password="secret-password")
     db = Database(cfg.db_path)

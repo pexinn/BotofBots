@@ -13,10 +13,18 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from app.categories import detect_category_name
 from app.config import Settings
 from app.database import Database
+from app.engine import DealEngine
 from app.keywords_sync import KeywordsSyncManager
-from app.rules import format_rule_line
+from app.rules import (
+    evaluate_rule,
+    extract_canonical_urls,
+    extract_price,
+    format_rule_line,
+    parse_rule,
+)
 
 
 _TEMPLATE_PATH = Path(__file__).parent / "templates" / "index.html"
@@ -40,11 +48,18 @@ class KeywordCreatePayload(BaseModel):
 
 
 class KeywordUpdatePayload(BaseModel):
+    term: str | None = None
     enabled: bool | None = None
     max_price: float | None = None
     clear_max_price: bool = False
     negatives: list[str] | None = None
     strict_lt: bool | None = None
+
+
+class SimulatePayload(BaseModel):
+    rule: str
+    sample_message: str
+    use_global_blacklist: bool = True
 
 
 class BlacklistCreatePayload(BaseModel):
@@ -103,6 +118,7 @@ def create_app(
             )
 
     @app.get("/", response_class=HTMLResponse)
+    @app.get("/guia", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
         if not _TEMPLATE_PATH.exists():
             return HTMLResponse("<h1>Dashboard template not found</h1>", status_code=500)
@@ -202,18 +218,132 @@ def create_app(
 
     @app.patch("/api/keywords/{kw_id}", dependencies=[Depends(require_auth)])
     async def patch_keyword(kw_id: int, payload: KeywordUpdatePayload) -> dict[str, Any]:
-        kw = db.update_keyword(
-            kw_id,
-            enabled=payload.enabled,
-            max_price=payload.max_price,
-            clear_max_price=payload.clear_max_price,
-            negatives=payload.negatives,
-            strict_lt=payload.strict_lt,
-        )
+        try:
+            kw = db.update_keyword(
+                kw_id,
+                enabled=payload.enabled,
+                max_price=payload.max_price,
+                clear_max_price=payload.clear_max_price,
+                negatives=payload.negatives,
+                strict_lt=payload.strict_lt,
+                term=payload.term,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not kw:
             raise HTTPException(status_code=404, detail="Palavra-chave não encontrada")
         sync_manager.export_to_file()
         return {"keyword": kw}
+
+    @app.post("/api/simulate", dependencies=[Depends(require_auth)])
+    async def simulate_rule(payload: SimulatePayload) -> dict[str, Any]:
+        parsed = parse_rule(payload.rule)
+        detected_price = extract_price(payload.sample_message)
+        canonical_urls = extract_canonical_urls(payload.sample_message)
+        channels = db.list_thematic_channels()
+        detected_category = detect_category_name(payload.sample_message, channels)
+
+        if parsed is None:
+            return {
+                "valid": False,
+                "parsed": None,
+                "detected_price": detected_price,
+                "detected_category": detected_category,
+                "canonical_urls": canonical_urls,
+                "would_alert": False,
+                "reason": "invalid_rule",
+                "explanation": "Regra vazia ou inválida. Informe pelo menos uma palavra positiva (ex: ssd nvme 1tb <= 1000).",
+            }
+
+        parsed_info = {
+            "raw": parsed.raw,
+            "term": parsed.term,
+            "positives": parsed.positives,
+            "negatives": parsed.negatives,
+            "max_price": parsed.max_price,
+            "strict_lt": parsed.strict_lt,
+            "is_global_blacklist": parsed.is_global_blacklist,
+        }
+
+        if parsed.is_global_blacklist:
+            return {
+                "valid": True,
+                "parsed": parsed_info,
+                "detected_price": detected_price,
+                "detected_category": detected_category,
+                "canonical_urls": canonical_urls,
+                "would_alert": False,
+                "reason": "global_blacklist_rule",
+                "explanation": "Esta sintaxe define uma palavra de Blacklist Global (bloqueia outras regras), não um alerta positivo.",
+            }
+
+        global_bl = db.list_blacklist() if payload.use_global_blacklist else []
+        matched, block_reason = evaluate_rule(parsed, payload.sample_message, global_bl)
+
+        if block_reason == "blacklist":
+            return {
+                "valid": True,
+                "parsed": parsed_info,
+                "detected_price": detected_price,
+                "detected_category": detected_category,
+                "canonical_urls": canonical_urls,
+                "would_alert": False,
+                "reason": "blacklist",
+                "explanation": "As palavras positivas casaram, mas o alerta foi BLOQUEADO por uma marca/termo negativo ou pela Blacklist Global.",
+            }
+
+        if not matched:
+            return {
+                "valid": True,
+                "parsed": parsed_info,
+                "detected_price": detected_price,
+                "detected_category": detected_category,
+                "canonical_urls": canonical_urls,
+                "would_alert": False,
+                "reason": "no_match",
+                "explanation": "A mensagem não contém todas as palavras positivas exigidas pela regra.",
+            }
+
+        req_price = (
+            db.get_setting("require_price_for_cap") or str(settings.require_price_for_cap)
+        ).lower() == "true"
+
+        if not DealEngine._check_price_cap(
+            parsed.max_price, parsed.strict_lt, detected_price, req_price
+        ):
+            if detected_price is None:
+                return {
+                    "valid": True,
+                    "parsed": parsed_info,
+                    "detected_price": None,
+                    "detected_category": detected_category,
+                    "canonical_urls": canonical_urls,
+                    "would_alert": False,
+                    "reason": "missing_price",
+                    "explanation": "A regra define um preço máximo, mas nenhum preço à vista válido foi detectado na mensagem.",
+                }
+            op = "<" if parsed.strict_lt else "<="
+            return {
+                "valid": True,
+                "parsed": parsed_info,
+                "detected_price": detected_price,
+                "detected_category": detected_category,
+                "canonical_urls": canonical_urls,
+                "would_alert": False,
+                "reason": "price_above_cap",
+                "explanation": f"Preço detectado (R$ {detected_price:.2f}) está acima do teto configurado ({op} R$ {parsed.max_price:.2f}). Alerta descartado!",
+            }
+
+        return {
+            "valid": True,
+            "parsed": parsed_info,
+            "detected_price": detected_price,
+            "detected_category": detected_category,
+            "canonical_urls": canonical_urls,
+            "would_alert": True,
+            "reason": "matched",
+            "explanation": "Sucesso! Todas as palavras casaram, nenhuma exclusão foi ativada e o preço respeita o teto configurado.",
+        }
 
     @app.delete("/api/keywords/{kw_id}", dependencies=[Depends(require_auth)])
     async def remove_keyword(kw_id: int) -> dict[str, bool]:

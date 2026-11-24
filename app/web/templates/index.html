@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen antialiased" x-data="dashboard()" x-init="init()">
 
@@ -112,6 +113,9 @@
       <button @click="tab = 'multiuser'; loadMultiUser()" :class="tab === 'multiuser' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'" class="px-4 py-2 rounded-xl text-sm font-medium transition">
         👥 Multi-Usuário &amp; Canais
       </button>
+      <button @click="tab = 'guide'" :class="tab === 'guide' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'" class="px-4 py-2 rounded-xl text-sm font-medium transition">
+        📖 Guia &amp; Simulador
+      </button>
     </nav>
 
     <!-- TAB 1: KEYWORDS & BLACKLIST -->
@@ -171,7 +175,8 @@
                 <span class="px-2 py-0.5 text-xs rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30"
                       x-text="(kw.strict_lt ? '< ' : '<= ') + 'R$ ' + Number(kw.max_price).toFixed(2)"></span>
               </template>
-              <button @click="deleteKeyword(kw.id)" class="ml-1 text-slate-400 hover:text-rose-400 text-xs font-bold" title="Excluir">✕</button>
+              <button @click="openEditKeyword(kw)" class="ml-1 text-slate-400 hover:text-indigo-400 text-xs" title="Editar termo, exclusões ou preço máximo">✏️</button>
+              <button @click="deleteKeyword(kw.id)" class="text-slate-400 hover:text-rose-400 text-xs font-bold" title="Excluir">✕</button>
             </div>
           </template>
         </div>
@@ -463,6 +468,199 @@
       </div>
     </section>
 
+    <!-- TAB 5: INTERACTIVE GUIDE & RULE SIMULATOR -->
+    <section x-show="tab === 'guide'" class="space-y-6">
+      <!-- Simulator -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-semibold text-white">🧪 Simulador Interativo de Regras em Tempo Real</h2>
+            <p class="text-xs text-slate-400">Teste sua regra contra uma mensagem de promoção antes de salvar — usa exatamente o mesmo motor do bot.</p>
+          </div>
+          <span class="text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-1 rounded-full">Link direto: <code>/guia</code></span>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <span class="text-xs text-slate-400 self-center">Testes rápidos:</span>
+          <button type="button" @click="applySimPreset('valid')" class="px-2.5 py-1 rounded-lg text-xs bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition">✅ Oferta R$ 899,90</button>
+          <button type="button" @click="applySimPreset('kootion')" class="px-2.5 py-1 rounded-lg text-xs bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 transition">🚫 Marca Kootion</button>
+          <button type="button" @click="applySimPreset('expensive')" class="px-2.5 py-1 rounded-lg text-xs bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition">💰 De R$ 2000 por R$ 1200</button>
+          <button type="button" @click="applySimPreset('installment')" class="px-2.5 py-1 rounded-lg text-xs bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition">💳 Só 12x sem preço à vista</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Regra a testar</label>
+              <input type="text" x-model="simForm.rule" placeholder="ex: ssd nvme 1tb -kootion <= 1000"
+                     class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Mensagem de exemplo (como viria no Telegram)</label>
+              <textarea rows="5" x-model="simForm.sample_message"
+                        class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <label class="inline-flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input type="checkbox" x-model="simForm.use_global_blacklist" class="accent-indigo-600" />
+                Aplicar Blacklist Global atual
+              </label>
+              <div class="flex gap-2">
+                <button type="button" @click="runSimulation()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition">
+                  ▶ Testar Regra
+                </button>
+                <button type="button" @click="saveSimulatedRule()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition">
+                  💾 Salvar esta Regra
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-3">
+            <template x-if="!simResult">
+              <div class="text-sm text-slate-500 m-auto text-center py-8">
+                Clique em <strong>▶ Testar Regra</strong> ou escolha um dos testes rápidos acima.
+              </div>
+            </template>
+            <template x-if="simResult">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="px-3 py-1 rounded-full text-xs font-bold"
+                        :class="simResult.would_alert ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'"
+                        x-text="simResult.would_alert ? '🚨 DISPARARIA ALERTA' : '🛑 BLOQUEADO / IGNORADO'"></span>
+                  <span class="text-xs text-slate-400 font-mono" x-text="simResult.reason"></span>
+                </div>
+                <p class="text-sm text-slate-200" x-text="simResult.explanation"></p>
+                <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">
+                  <div>
+                    <span class="text-slate-400">Preço detectado:</span>
+                    <span class="font-semibold text-emerald-300 ml-1"
+                          x-text="simResult.detected_price !== null ? 'R$ ' + Number(simResult.detected_price).toFixed(2) : 'Nenhum'"></span>
+                  </div>
+                  <div>
+                    <span class="text-slate-400">Categoria:</span>
+                    <span class="font-semibold text-indigo-300 ml-1" x-text="simResult.detected_category || 'Sem categoria'"></span>
+                  </div>
+                  <div class="col-span-2" x-show="simResult.parsed">
+                    <span class="text-slate-400">Termo interpretado:</span>
+                    <code class="text-white ml-1" x-text="simResult.parsed?.term"></code>
+                    <template x-for="n in (simResult.parsed?.negatives || [])" :key="n">
+                      <span class="ml-1 px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300" x-text="'-' + n"></span>
+                    </template>
+                    <template x-if="simResult.parsed?.max_price !== null">
+                      <span class="ml-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300"
+                            x-text="(simResult.parsed?.strict_lt ? '< ' : '<= ') + 'R$ ' + Number(simResult.parsed?.max_price).toFixed(2)"></span>
+                    </template>
+                  </div>
+                  <div class="col-span-2" x-show="(simResult.canonical_urls || []).length > 0">
+                    <span class="text-slate-400">Link canônico (dedup):</span>
+                    <code class="text-slate-300 ml-1" x-text="(simResult.canonical_urls || []).join(', ')"></code>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Syntax & Possibilities -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-white">🧠 Busca Multi-Palavras &amp; Unidades</h3>
+          <p class="text-xs text-slate-400">Encontra ofertas mesmo com palavras fora de ordem e normaliza unidades como <code>1tb</code> = <code>1 tb</code>, <code>500gb</code>, <code>144hz</code>, <code>750w</code>.</p>
+          <code class="block text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-indigo-300">ssd nvme 1tb</code>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-white">🚫 Exclusão de Marcas / Termos</h3>
+          <p class="text-xs text-slate-400">Use <code>-palavra</code> ou <code>!palavra</code> para bloquear marcas ou variações indesejadas naquela regra.</p>
+          <code class="block text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-rose-300">ssd nvme 1tb -kootion -sata -usado</code>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-white">💰 Preço Máximo (Teto Estrito)</h3>
+          <p class="text-xs text-slate-400">Adicione <code>&lt;= VALOR</code> ou <code>&lt; VALOR</code>. O bot ignora parcelas, cupons, frete e "economia de R$ X", avaliando apenas o preço final real.</p>
+          <code class="block text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-amber-300">ssd nvme 1tb -kootion &lt;= 1000</code>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-white">✏️ Edição de Termos Existentes</h3>
+          <p class="text-xs text-slate-400">Não precisa apagar para alterar preço ou exclusões: clique no ícone <strong>✏️</strong> em qualquer chip da aba <em>Palavras &amp; Blacklist</em>, ou envie <code>/add</code> novamente no Telegram com o mesmo termo.</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-white">🛡️ Anti-Spam &amp; Blacklist Global</h3>
+          <p class="text-xs text-slate-400">Links da Amazon (ASIN) e Mercado Livre (MLB) são normalizados para evitar alertas repetidos em 30 min. Palavras na Blacklist Global (<code>-leilao</code>) bloqueiam todas as regras.</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+          <h3 class="text-sm font-semibold text-white">👥 Multi-Usuário &amp; Canais Temáticos</h3>
+          <p class="text-xs text-slate-400">Amigos podem enviar <code>/alerta</code> no privado do bot para receber avisos individuais, e canais temáticos separam Hardware, Periféricos e Games automaticamente.</p>
+        </div>
+      </div>
+
+      <!-- Telegram Commands Reference -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <h2 class="text-base font-semibold text-white">🤖 Comandos Diretos no Telegram (<code>@ofertas_pessoais_ander_bot</code>)</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <template x-for="item in telegramCommands" :key="item.cmd">
+            <div class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-xl p-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <code class="text-xs font-semibold text-indigo-300" x-text="item.cmd"></code>
+                  <span class="px-1.5 py-0.5 text-[10px] rounded bg-slate-800 text-slate-400" x-text="item.scope"></span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1" x-text="item.desc"></p>
+              </div>
+              <button type="button" @click="copyCommand(item.cmd)"
+                      class="shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-xs text-slate-200 transition">
+                Copiar
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </section>
+
+    <!-- Edit Keyword Modal -->
+    <div x-show="editModal.open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+      <div @click.outside="editModal.open = false" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-white">✏️ Editar Regra Monitorada</h3>
+          <button type="button" @click="editModal.open = false" class="text-slate-400 hover:text-white text-sm">✕</button>
+        </div>
+        <form @submit.prevent="saveEditKeyword()" class="space-y-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Produto / Termo</label>
+            <input type="text" x-model="editModal.term" required
+                   class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Excluir marcas/termos (separados por espaço ou vírgula)</label>
+            <input type="text" x-model="editModal.negatives" placeholder="ex: kootion, sata"
+                   class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <label class="block text-xs text-slate-400 mb-1">Preço Máximo (R$) — vazio remove teto</label>
+              <input type="number" step="0.01" min="0" x-model="editModal.max_price" placeholder="ex: 1000"
+                     class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Operador</label>
+              <select x-model="editModal.strict_lt" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-2 py-2 text-sm text-white">
+                <option :value="false">&lt;= (Até)</option>
+                <option :value="true">&lt; (Menor)</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" @click="editModal.open = false" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200">
+              Cancelar
+            </button>
+            <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
+              💾 Salvar Alterações
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </main>
 
   <script>
@@ -483,6 +681,25 @@
         priceAnalytics: { points: [], summary: {}, available_terms: [] },
         channelRanking: [],
         kwForm: { term: '', negatives: '', max_price: '' },
+        editModal: { open: false, id: null, term: '', negatives: '', max_price: '', strict_lt: false },
+        simForm: {
+          rule: 'ssd nvme 1tb -kootion <= 1000',
+          sample_message: '🔥 SSD Kingston NV2 1TB NVMe M.2 - De R$ 1.299 por R$ 899,90 no Pix https://www.amazon.com.br/dp/B0BBWH1R8H?tag=canal',
+          use_global_blacklist: true,
+        },
+        simResult: null,
+        telegramCommands: [
+          { cmd: '/add ssd nvme 1tb -kootion <= 1000', scope: 'Admin', desc: 'Adiciona ou atualiza regra global + keywords.txt' },
+          { cmd: '/del 1', scope: 'Admin', desc: 'Remove regra global por número do /list ou nome' },
+          { cmd: '/list', scope: 'Admin', desc: 'Lista regras monitoradas e blacklist global' },
+          { cmd: '/block kootion', scope: 'Admin', desc: 'Bloqueia palavra em todas as buscas (blacklist global)' },
+          { cmd: '/unblock kootion', scope: 'Admin', desc: 'Remove palavra da blacklist global' },
+          { cmd: '/pause / /resume', scope: 'Admin', desc: 'Pausa ou retoma os alertas temporariamente' },
+          { cmd: '/status', scope: 'Admin', desc: 'Mostra uptime, chats monitorados e métricas de hoje' },
+          { cmd: '/alerta rtx 4060 <= 1800', scope: 'Multi-Usuário', desc: 'Cadastra/atualiza alerta pessoal no privado do bot' },
+          { cmd: '/meusalertas', scope: 'Multi-Usuário', desc: 'Lista alertas pessoais do usuário' },
+          { cmd: '/remover 1', scope: 'Multi-Usuário', desc: 'Remove alerta pessoal por número ou termo' },
+        ],
         newBlacklistWord: '',
         runtimeSettings: { dedup_window_minutes: 30, require_price_for_cap: true },
         dealFilter: { search: '', category: '', max_price: '' },
@@ -490,11 +707,16 @@
         chartInstance: null,
 
         async init() {
+          const params = new URLSearchParams(window.location.search);
+          if (window.location.pathname === '/guia' || window.location.hash === '#guia' || params.get('tab') === 'guide') {
+            this.tab = 'guide';
+          }
           const authRes = await fetch('/api/auth/status').then(r => r.json());
           this.authRequired = authRes.auth_required;
           this.needsLogin = authRes.auth_required && !authRes.authenticated;
           if (!this.needsLogin) {
             await this.refreshAll();
+            if (this.tab === 'guide') await this.runSimulation();
           }
         },
 
@@ -589,6 +811,89 @@
             body: JSON.stringify({ enabled: !kw.enabled }),
           });
           await this.refreshAll();
+        },
+
+        openEditKeyword(kw) {
+          this.editModal = {
+            open: true,
+            id: kw.id,
+            term: kw.term,
+            negatives: (kw.negatives || []).join(', '),
+            max_price: kw.max_price !== null && kw.max_price !== undefined ? String(kw.max_price) : '',
+            strict_lt: Boolean(kw.strict_lt),
+          };
+        },
+
+        async saveEditKeyword() {
+          const negatives = this.editModal.negatives
+            .split(/[\s,]+/)
+            .map(s => s.trim().replace(/^[-!]+/, ''))
+            .filter(Boolean);
+          const hasPrice = String(this.editModal.max_price).trim() !== '';
+          try {
+            await this.api(`/api/keywords/${this.editModal.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                term: this.editModal.term.trim(),
+                negatives,
+                max_price: hasPrice ? Number(this.editModal.max_price) : null,
+                clear_max_price: !hasPrice,
+                strict_lt: this.editModal.strict_lt,
+              }),
+            });
+            this.editModal.open = false;
+            await this.refreshAll();
+            this.notify('Termo atualizado e salvo em keywords.txt!');
+          } catch (e) {
+            this.notify('Erro: ' + e.message);
+          }
+        },
+
+        applySimPreset(kind) {
+          if (kind === 'valid') {
+            this.simForm.sample_message = '🔥 SSD Kingston NV2 1TB NVMe M.2 - De R$ 1.299 por R$ 899,90 no Pix https://www.amazon.com.br/dp/B0BBWH1R8H?tag=canal';
+          } else if (kind === 'kootion') {
+            this.simForm.sample_message = '⚡ SSD NVMe 1TB Kootion X16 por R$ 289,90';
+          } else if (kind === 'expensive') {
+            this.simForm.sample_message = 'SSD NVMe 1TB - De R$ 2.000,00 por R$ 1.200,00 (Economia de R$ 800,00 / 12x sem juros de R$ 100,00)';
+          } else if (kind === 'installment') {
+            this.simForm.sample_message = 'SSD NVMe 1TB em 12x sem juros de R$ 95,00';
+          }
+          this.runSimulation();
+        },
+
+        async runSimulation() {
+          try {
+            this.simResult = await this.api('/api/simulate', {
+              method: 'POST',
+              body: JSON.stringify(this.simForm),
+            });
+          } catch (e) {
+            this.notify('Erro: ' + e.message);
+          }
+        },
+
+        async saveSimulatedRule() {
+          if (!this.simForm.rule.trim()) return;
+          try {
+            await this.api('/api/keywords', {
+              method: 'POST',
+              body: JSON.stringify({ raw_line: this.simForm.rule.trim() }),
+            });
+            await this.refreshAll();
+            this.notify('Regra salva e ativada em keywords.txt!');
+          } catch (e) {
+            this.notify('Erro: ' + e.message);
+          }
+        },
+
+        async copyCommand(cmd) {
+          try {
+            await navigator.clipboard.writeText(cmd);
+            this.notify('Comando copiado!');
+          } catch {
+            this.notify(cmd);
+          }
         },
 
         async deleteKeyword(id) {
