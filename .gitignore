@@ -6,6 +6,12 @@
 string_session.txt
 keywords.txt
 
+# Banco de dados e dados locais
+data/
+*.db
+*.db-wal
+*.db-shm
+
 # Python
 __pycache__/
 *.py[cod]
@@ -41,4 +47,3 @@ ENV/
 *.swo
 *~
 .DS_Store
-

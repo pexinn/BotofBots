@@ -1,0 +1,74 @@
+{
+  "version": "2",
+  "templates": [
+    {
+      "type": 1,
+      "title": "Bot of Bots — Telegram Deal Monitor",
+      "description": "Monitorador em tempo real de ofertas no Telegram com arquitetura híbrida (Telethon + Bot API), filtros de preço/marca, anti-spam, multi-usuário e Dashboard Web.",
+      "categories": ["Automation", "Bots", "Homelab"],
+      "platform": "linux",
+      "name": "botofbots",
+      "image": "ghcr.io/pexinn/botofbots:latest",
+      "restart_policy": "unless-stopped",
+      "ports": [
+        "8086:8086/tcp"
+      ],
+      "volumes": [
+        {
+          "container": "/app/data",
+          "bind": "/opt/botofbots/data"
+        },
+        {
+          "container": "/app/keywords.txt",
+          "bind": "/opt/botofbots/keywords.txt"
+        }
+      ],
+      "env": [
+        {
+          "name": "API_ID",
+          "label": "Telegram API ID (my.telegram.org)"
+        },
+        {
+          "name": "API_HASH",
+          "label": "Telegram API Hash (my.telegram.org)"
+        },
+        {
+          "name": "TELEGRAM_STRING_SESSION",
+          "label": "Telethon StringSession (scripts/gerar_sessao.py)"
+        },
+        {
+          "name": "TELEGRAM_BOT_TOKEN",
+          "label": "Token do Bot (@BotFather)"
+        },
+        {
+          "name": "ALERT_DESTINATION",
+          "label": "ID do Canal Privado de Alertas (ex: -1001234567890)",
+          "default": "me"
+        },
+        {
+          "name": "ADMIN_USER_ID",
+          "label": "Seu User ID do Telegram (Admin)"
+        },
+        {
+          "name": "WEB_PORT",
+          "label": "Porta do Dashboard Web",
+          "default": "8086"
+        },
+        {
+          "name": "WEB_PASSWORD",
+          "label": "Senha opcional do Dashboard Web"
+        },
+        {
+          "name": "DEDUP_WINDOW_MINUTES",
+          "label": "Janela Anti-Spam / Deduplicação (minutos)",
+          "default": "30"
+        },
+        {
+          "name": "MAX_TERMS_PER_USER",
+          "label": "Limite de alertas por usuário (Multi-Usuário)",
+          "default": "5"
+        }
+      ]
+    }
+  ]
+}

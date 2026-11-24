@@ -7,6 +7,7 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+    ports:
+      - "${WEB_PORT:-8086}:8086"
     volumes:
       - .:/app
-

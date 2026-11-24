@@ -2,16 +2,19 @@
 # LISTA DE PALAVRAS-CHAVE MONITORADAS
 # ========================================================
 # Adicione um termo por linha. Linhas iniciadas com '#' sao ignoradas.
-# O motor de busca inteligente encontra a mensagem se TODAS as palavras
-# daquela linha estiverem presentes, independente da ordem, e normaliza
-# capacidades de hardware (ex: '1tb' encontra '1 tb' e vice-versa).
 #
-# DICA: Crie seu arquivo 'keywords.txt' a partir deste exemplo.
-# Qualquer edicao no 'keywords.txt' e recarregada automaticamente
-# pelo bot em tempo real, sem necessidade de reiniciar o container!
+# Recursos suportados:
+# 1. Multi-palavras: encontra mesmo fora de ordem e normaliza unidades (1tb = 1 tb).
+# 2. Exclusao de marcas/termos (prefixo '-' ou '!'):
+#    ex: 'ssd nvme 1tb -kootion -sata -usado' ignora SSDs Kootion, SATA ou usados.
+# 3. Blacklist global: linha apenas com '-palavra' bloqueia em TODAS as buscas.
+# 4. Preco maximo (teto): adicione '<= VALOR' ou '< VALOR' ao final da linha.
+#    ex: 'rtx 4060 <= 1750' so alerta se o preco encontrado for <= R$ 1.750,00.
+#
+# Qualquer edicao em 'keywords.txt' e recarregada automaticamente em tempo real!
 
-ssd nvme 1tb
-rtx 4060
+-leilao
+ssd nvme 1tb -kootion -sata -usado <= 380
+rtx 4060 <= 1750
 ryzen 7 5700x3d
 monitor 144hz
-

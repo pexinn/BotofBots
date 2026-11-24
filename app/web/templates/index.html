@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bot of Bots — Painel de Ofertas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased" x-data="dashboard()" x-init="init()">
+
+  <!-- Login Modal -->
+  <div x-show="needsLogin" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+      <h2 class="text-xl font-bold text-white mb-1">🔐 Bot of Bots</h2>
+      <p class="text-sm text-slate-400 mb-4">Informe a senha configurada em <code>WEB_PASSWORD</code>.</p>
+      <form @submit.prevent="doLogin()" class="space-y-3">
+        <input type="password" x-model="loginPassword" placeholder="Senha de acesso"
+               class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        <p x-show="loginError" x-text="loginError" class="text-xs text-rose-400"></p>
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg text-sm transition">
+          Entrar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-xl">🤖</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">Bot of Bots</h1>
+            <span class="px-2 py-0.5 text-xs font-medium rounded-full"
+                  :class="status.paused ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'"
+                  x-text="status.paused ? '⏸️ Pausado' : '🟢 Ativo'"></span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Uptime: <span x-text="formatUptime(status.uptime_seconds)"></span> ·
+            Chats monitorados: <span x-text="status.monitored_chats"></span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button @click="togglePause()"
+                :class="status.paused ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition">
+          <span x-text="status.paused ? '▶️ Retomar' : '⏸️ Pausar'"></span>
+        </button>
+        <button @click="refreshAll()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+          🔄 Atualizar
+        </button>
+        <button x-show="authRequired" @click="doLogout()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition">
+          Sair
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6" x-show="!needsLogin">
+
+    <!-- Toast -->
+    <div x-show="toast" x-transition class="fixed bottom-4 right-4 z-40 bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-xl text-sm font-medium" x-text="toast"></div>
+
+    <!-- KPIs -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs text-slate-400">Mensagens Lidas (Hoje)</p>
+        <p class="text-2xl font-bold text-white mt-1" x-text="status.today?.messages_processed ?? 0"></p>
+        <p class="text-[11px] text-slate-500 mt-1">Total: <span x-text="status.totals?.messages_processed ?? 0"></span></p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs text-slate-400">Alertas Enviados (Hoje)</p>
+        <p class="text-2xl font-bold text-emerald-400 mt-1" x-text="status.today?.alerts_sent ?? 0"></p>
+        <p class="text-[11px] text-slate-500 mt-1">Total: <span x-text="status.totals?.alerts_sent ?? 0"></span></p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs text-slate-400">Bloqueios Inteligentes (Hoje)</p>
+        <p class="text-2xl font-bold text-amber-400 mt-1"
+           x-text="(status.today?.blacklist_blocked ?? 0) + (status.today?.price_blocked ?? 0) + (status.today?.dedup_blocked ?? 0)"></p>
+        <p class="text-[11px] text-slate-500 mt-1">
+          Marca: <span x-text="status.today?.blacklist_blocked ?? 0"></span> ·
+          Preço: <span x-text="status.today?.price_blocked ?? 0"></span> ·
+          Dedup: <span x-text="status.today?.dedup_blocked ?? 0"></span>
+        </p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <p class="text-xs text-slate-400">Regras &amp; Multi-Usuário</p>
+        <p class="text-2xl font-bold text-indigo-400 mt-1"><span x-text="status.active_keywords_count ?? 0"></span> regras</p>
+        <p class="text-[11px] text-slate-500 mt-1">
+          Blacklist: <span x-text="status.blacklist_count ?? 0"></span> ·
+          Inscritos: <span x-text="status.users_count ?? 0"></span>
+        </p>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+      <button @click="tab = 'keywords'" :class="tab === 'keywords' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'" class="px-4 py-2 rounded-xl text-sm font-medium transition">
+        🎯 Palavras &amp; Blacklist
+      </button>
+      <button @click="tab = 'deals'; loadDeals()" :class="tab === 'deals' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'" class="px-4 py-2 rounded-xl text-sm font-medium transition">
+        📜 Histórico de Ofertas
+      </button>
+      <button @click="tab = 'analytics'; loadAnalytics()" :class="tab === 'analytics' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'" class="px-4 py-2 rounded-xl text-sm font-medium transition">
+        📊 Preços &amp; Canais
+      </button>
+      <button @click="tab = 'multiuser'; loadMultiUser()" :class="tab === 'multiuser' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'" class="px-4 py-2 rounded-xl text-sm font-medium transition">
+        👥 Multi-Usuário &amp; Canais
+      </button>
+    </nav>
+
+    <!-- TAB 1: KEYWORDS & BLACKLIST -->
+    <section x-show="tab === 'keywords'" class="space-y-6">
+      <!-- Add Keyword Card -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-semibold text-white">Adicionar Palavra Monitorada</h2>
+            <p class="text-xs text-slate-400">Ex.: monitorar <code>ssd nvme 1tb</code> excluindo <code>kootion</code> e com teto de <code>R$ 380</code>.</p>
+          </div>
+          <span class="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full">⚡ Hot-reload em keywords.txt</span>
+        </div>
+
+        <form @submit.prevent="addKeyword()" class="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <div class="md:col-span-5">
+            <label class="block text-xs text-slate-400 mb-1">Produto / Termo</label>
+            <input type="text" x-model="kwForm.term" placeholder="ex: ssd nvme 1tb"
+                   class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div class="md:col-span-4">
+            <label class="block text-xs text-slate-400 mb-1">Excluir marcas/termos (separados por espaço ou vírgula)</label>
+            <input type="text" x-model="kwForm.negatives" placeholder="ex: kootion, sata, usado"
+                   class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs text-slate-400 mb-1">Preço Máx (R$)</label>
+            <input type="number" step="0.01" min="0" x-model="kwForm.max_price" placeholder="ex: 380"
+                   class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div class="md:col-span-1 flex items-end">
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-3 rounded-xl text-sm transition">
+              + Add
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Active Keywords Chips -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h2 class="text-base font-semibold text-white mb-3">Termos Monitorados (<span x-text="keywords.length"></span>)</h2>
+        <div x-show="keywords.length === 0" class="text-sm text-slate-500 py-4 text-center">
+          Nenhum termo cadastrado no momento.
+        </div>
+        <div class="flex flex-wrap gap-2.5">
+          <template x-for="kw in keywords" :key="kw.id">
+            <div class="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition"
+                 :class="kw.enabled ? 'bg-slate-950 border-slate-700' : 'bg-slate-950/40 border-slate-800 opacity-60'">
+              <button @click="toggleKeyword(kw)" title="Ativar / Pausar termo" class="text-xs">
+                <span x-text="kw.enabled ? '🟢' : '⏸️'"></span>
+              </button>
+              <span class="font-semibold text-white" x-text="kw.term"></span>
+              <template x-for="neg in kw.negatives" :key="neg">
+                <span class="px-2 py-0.5 text-xs rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30" x-text="'-' + neg"></span>
+              </template>
+              <template x-if="kw.max_price !== null">
+                <span class="px-2 py-0.5 text-xs rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                      x-text="(kw.strict_lt ? '< ' : '<= ') + 'R$ ' + Number(kw.max_price).toFixed(2)"></span>
+              </template>
+              <button @click="deleteKeyword(kw.id)" class="ml-1 text-slate-400 hover:text-rose-400 text-xs font-bold" title="Excluir">✕</button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Global Blacklist + Settings -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <h2 class="text-base font-semibold text-white">🚫 Blacklist Global de Marcas / Termos</h2>
+          <p class="text-xs text-slate-400">Qualquer palavra listada aqui bloqueia alertas em <strong>todas</strong> as regras principais.</p>
+          <form @submit.prevent="addBlacklist()" class="flex gap-2">
+            <input type="text" x-model="newBlacklistWord" placeholder="ex: kootion ou leilao"
+                   class="flex-1 rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
+            <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white font-semibold px-4 py-2 rounded-xl text-sm transition">
+              Bloquear
+            </button>
+          </form>
+          <div class="flex flex-wrap gap-2 pt-1">
+            <template x-for="w in blacklist" :key="w">
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                <span x-text="'-' + w"></span>
+                <button @click="deleteBlacklist(w)" class="hover:text-white font-bold">✕</button>
+              </span>
+            </template>
+            <span x-show="blacklist.length === 0" class="text-xs text-slate-500">Nenhuma palavra na blacklist global.</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 class="text-base font-semibold text-white">⚙️ Filtros &amp; Deduplicação</h2>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-slate-200">Janela Anti-Spam / Deduplicação (min)</p>
+                <p class="text-xs text-slate-400">Tempo mínimo para repetir a mesma oferta/link.</p>
+              </div>
+              <input type="number" min="1" x-model.number="runtimeSettings.dedup_window_minutes"
+                     class="w-24 rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white text-center" />
+            </div>
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-slate-200">Exigir preço detectado quando houver teto</p>
+                <p class="text-xs text-slate-400">Se a regra tem <code>&lt;= R$</code> e o post não traz preço, bloqueia.</p>
+              </div>
+              <input type="checkbox" x-model="runtimeSettings.require_price_for_cap" class="h-5 w-5 accent-indigo-600 rounded" />
+            </div>
+            <button @click="saveRuntimeSettings()" class="bg-slate-800 hover:bg-indigo-600 text-white text-xs font-semibold px-4 py-2 rounded-xl transition">
+              Salvar Configurações
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: DEALS HISTORY -->
+    <section x-show="tab === 'deals'" class="space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap gap-3 items-end">
+        <div class="flex-1 min-w-[200px]">
+          <label class="block text-xs text-slate-400 mb-1">Buscar no texto/termo</label>
+          <input type="text" x-model="dealFilter.search" @keyup.enter="loadDeals()" placeholder="ex: kingston, kabum..."
+                 class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Categoria</label>
+          <select x-model="dealFilter.category" @change="loadDeals()" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white">
+            <option value="">Todas</option>
+            <option value="Hardware & PC">Hardware &amp; PC</option>
+            <option value="Periféricos">Periféricos</option>
+            <option value="Games & Consoles">Games &amp; Consoles</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Preço Máx (R$)</label>
+          <input type="number" step="0.01" x-model="dealFilter.max_price" @keyup.enter="loadDeals()" placeholder="500"
+                 class="w-28 rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white" />
+        </div>
+        <button @click="loadDeals()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-sm font-semibold">
+          Filtrar
+        </button>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="px-4 py-3">Data</th>
+                <th class="px-4 py-3">Termo</th>
+                <th class="px-4 py-3">Preço</th>
+                <th class="px-4 py-3">Categoria</th>
+                <th class="px-4 py-3">Canal</th>
+                <th class="px-4 py-3">Oferta</th>
+                <th class="px-4 py-3">Link</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/70">
+              <template x-for="d in deals" :key="d.id">
+                <tr class="hover:bg-slate-800/30">
+                  <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" x-text="formatDate(d.created_at)"></td>
+                  <td class="px-4 py-3 font-medium text-indigo-300">
+                    <span x-text="d.term"></span>
+                    <span x-show="d.is_duplicate" class="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-slate-800 text-slate-400">dup</span>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span x-show="d.price !== null" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300"
+                          x-text="'R$ ' + Number(d.price).toFixed(2)"></span>
+                    <span x-show="d.price === null" class="text-xs text-slate-500">—</span>
+                  </td>
+                  <td class="px-4 py-3 text-xs text-slate-300" x-text="d.category || '—'"></td>
+                  <td class="px-4 py-3 text-xs text-slate-300" x-text="d.channel_name"></td>
+                  <td class="px-4 py-3 text-xs text-slate-300 max-w-md truncate" x-text="d.raw_text"></td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <a x-show="d.message_link" :href="d.message_link" target="_blank" class="text-xs text-indigo-400 hover:underline">Abrir ↗</a>
+                    <span x-show="!d.message_link" class="text-xs text-slate-600">—</span>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="deals.length === 0">
+                <td colspan="7" class="px-4 py-8 text-center text-slate-500 text-sm">Nenhuma oferta registrada ainda.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: ANALYTICS -->
+    <section x-show="tab === 'analytics'" class="space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-white">📈 Variação de Preço ao Longo do Tempo</h2>
+            <p class="text-xs text-slate-400">Histórico extraído do banco SQLite (<code>deals.db</code>).</p>
+          </div>
+          <div class="flex gap-2">
+            <select x-model="analyticsFilter.term" @change="loadAnalytics()" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white">
+              <option value="">Todos os termos</option>
+              <template x-for="t in priceAnalytics.available_terms" :key="t">
+                <option :value="t" x-text="t"></option>
+              </template>
+            </select>
+            <select x-model.number="analyticsFilter.days" @change="loadAnalytics()" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-1.5 text-sm text-white">
+              <option :value="7">7 dias</option>
+              <option :value="30">30 dias</option>
+              <option :value="90">90 dias</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-400">Menor Preço</p>
+            <p class="text-lg font-bold text-emerald-400" x-text="priceAnalytics.summary?.min_price !== null ? 'R$ ' + Number(priceAnalytics.summary.min_price).toFixed(2) : '—'"></p>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-400">Preço Médio</p>
+            <p class="text-lg font-bold text-indigo-400" x-text="priceAnalytics.summary?.avg_price !== null ? 'R$ ' + Number(priceAnalytics.summary.avg_price).toFixed(2) : '—'"></p>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-400">Maior Preço</p>
+            <p class="text-lg font-bold text-rose-400" x-text="priceAnalytics.summary?.max_price !== null ? 'R$ ' + Number(priceAnalytics.summary.max_price).toFixed(2) : '—'"></p>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-400">Registros com Preço</p>
+            <p class="text-lg font-bold text-white" x-text="priceAnalytics.summary?.count ?? 0"></p>
+          </div>
+        </div>
+
+        <div class="h-72 relative">
+          <canvas id="priceChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Channel Ranking -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <h2 class="text-base font-semibold text-white">🏆 Ranking de Canais (Mais Rápidos &amp; Melhores Preços)</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs uppercase text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="py-2 pr-4">Canal</th>
+                <th class="py-2 px-4">Primeiras Capturas</th>
+                <th class="py-2 px-4">Total de Ofertas</th>
+                <th class="py-2 px-4">Preço Médio</th>
+                <th class="py-2 px-4">Menor Preço</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <template x-for="c in channelRanking" :key="c.channel_name">
+                <tr>
+                  <td class="py-2.5 pr-4 font-medium text-white" x-text="c.channel_name"></td>
+                  <td class="py-2.5 px-4 text-emerald-400 font-semibold" x-text="c.first_hits"></td>
+                  <td class="py-2.5 px-4 text-slate-300" x-text="c.total_deals"></td>
+                  <td class="py-2.5 px-4 text-slate-300" x-text="c.avg_price !== null ? 'R$ ' + Number(c.avg_price).toFixed(2) : '—'"></td>
+                  <td class="py-2.5 px-4 text-indigo-300" x-text="c.min_price !== null ? 'R$ ' + Number(c.min_price).toFixed(2) : '—'"></td>
+                </tr>
+              </template>
+              <tr x-show="channelRanking.length === 0">
+                <td colspan="5" class="py-6 text-center text-slate-500 text-sm">Ainda não há dados de canais neste período.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: MULTI-USER & THEMATIC CHANNELS -->
+    <section x-show="tab === 'multiuser'" class="space-y-6">
+      <!-- Users -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <h2 class="text-base font-semibold text-white">👥 Inscritos Multi-Usuário (Bot Centralizado)</h2>
+        <p class="text-xs text-slate-400">Usuários que enviaram <code>/start</code> ou <code>/alerta</code> no privado do bot.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs uppercase text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="py-2 pr-4">Usuário</th>
+                <th class="py-2 px-4">Status</th>
+                <th class="py-2 px-4">Limite</th>
+                <th class="py-2 px-4">Alertas Cadastrados</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/70">
+              <template x-for="u in users" :key="u.chat_id">
+                <tr>
+                  <td class="py-3 pr-4">
+                    <p class="font-medium text-white" x-text="u.username ? '@' + u.username : (u.first_name || 'Usuário')"></p>
+                    <p class="text-xs text-slate-500" x-text="u.chat_id"></p>
+                  </td>
+                  <td class="py-3 px-4">
+                    <button @click="toggleUser(u)" class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                            :class="u.active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
+                            x-text="u.active ? 'Ativo' : 'Bloqueado'"></button>
+                  </td>
+                  <td class="py-3 px-4">
+                    <input type="number" min="1" :value="u.max_terms" @change="updateUserLimit(u, $event.target.value)"
+                           class="w-16 rounded-lg bg-slate-950 border border-slate-700 px-2 py-1 text-xs text-white text-center" />
+                  </td>
+                  <td class="py-3 px-4">
+                    <div class="flex flex-wrap gap-1.5">
+                      <template x-for="t in u.terms" :key="t.id">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-slate-950 border border-slate-700 text-slate-200">
+                          <span x-text="t.raw_line"></span>
+                          <button @click="deleteUserTerm(u.chat_id, t.id)" class="text-slate-400 hover:text-rose-400 font-bold">✕</button>
+                        </span>
+                      </template>
+                      <span x-show="u.terms.length === 0" class="text-xs text-slate-500">Sem alertas</span>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="users.length === 0">
+                <td colspan="4" class="py-6 text-center text-slate-500 text-sm">Nenhum usuário inscrito ainda.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Thematic Channels -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <h2 class="text-base font-semibold text-white">📢 Canais Temáticos por Categoria</h2>
+        <p class="text-xs text-slate-400">Configure IDs de canais separados (ex: <code>-1001234567890</code>) para publicar promoções automaticamente por categoria.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <template x-for="ch in channels" :key="ch.slug">
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="font-semibold text-white text-sm" x-text="ch.name"></h3>
+                <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                  <input type="checkbox" x-model="ch.enabled" class="accent-indigo-600" /> Ativo
+                </label>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Chat ID do Canal</label>
+                <input type="text" x-model="ch.chat_id" placeholder="-100xxxxxxxxxx"
+                       class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Palavras da Categoria (vírgula)</label>
+                <textarea rows="3" x-model="ch.keywordsText"
+                          class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-xs text-white"></textarea>
+              </div>
+              <button @click="saveChannel(ch)" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-1.5 rounded-lg transition">
+                Salvar Canal
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function dashboard() {
+      return {
+        tab: 'keywords',
+        authRequired: false,
+        needsLogin: false,
+        loginPassword: '',
+        loginError: '',
+        toast: '',
+        status: { today: {}, totals: {} },
+        keywords: [],
+        blacklist: [],
+        deals: [],
+        users: [],
+        channels: [],
+        priceAnalytics: { points: [], summary: {}, available_terms: [] },
+        channelRanking: [],
+        kwForm: { term: '', negatives: '', max_price: '' },
+        newBlacklistWord: '',
+        runtimeSettings: { dedup_window_minutes: 30, require_price_for_cap: true },
+        dealFilter: { search: '', category: '', max_price: '' },
+        analyticsFilter: { term: '', days: 30 },
+        chartInstance: null,
+
+        async init() {
+          const authRes = await fetch('/api/auth/status').then(r => r.json());
+          this.authRequired = authRes.auth_required;
+          this.needsLogin = authRes.auth_required && !authRes.authenticated;
+          if (!this.needsLogin) {
+            await this.refreshAll();
+          }
+        },
+
+        notify(msg) {
+          this.toast = msg;
+          setTimeout(() => { if (this.toast === msg) this.toast = ''; }, 3000);
+        },
+
+        async api(url, opts = {}) {
+          const res = await fetch(url, {
+            headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+            ...opts,
+          });
+          if (res.status === 401) {
+            this.needsLogin = true;
+            throw new Error('Autenticação necessária');
+          }
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Erro na requisição');
+          return data;
+        },
+
+        async doLogin() {
+          this.loginError = '';
+          try {
+            await this.api('/api/login', {
+              method: 'POST',
+              body: JSON.stringify({ password: this.loginPassword }),
+            });
+            this.needsLogin = false;
+            this.loginPassword = '';
+            await this.refreshAll();
+          } catch (e) {
+            this.loginError = e.message;
+          }
+        },
+
+        async doLogout() {
+          await fetch('/api/logout', { method: 'POST' });
+          this.needsLogin = true;
+        },
+
+        async refreshAll() {
+          const [st, kws, bl, cfg] = await Promise.all([
+            this.api('/api/status'),
+            this.api('/api/keywords'),
+            this.api('/api/blacklist'),
+            this.api('/api/settings'),
+          ]);
+          this.status = st;
+          this.keywords = kws.keywords;
+          this.blacklist = bl.words;
+          this.runtimeSettings = cfg;
+          if (this.tab === 'deals') await this.loadDeals();
+          if (this.tab === 'analytics') await this.loadAnalytics();
+          if (this.tab === 'multiuser') await this.loadMultiUser();
+        },
+
+        async togglePause() {
+          const res = await this.api('/api/pause', { method: 'POST', body: JSON.stringify({}) });
+          this.status.paused = res.paused;
+          this.notify(res.paused ? 'Monitoramento pausado' : 'Monitoramento retomado');
+        },
+
+        async addKeyword() {
+          if (!this.kwForm.term.trim()) return;
+          const negatives = this.kwForm.negatives
+            .split(/[\s,]+/)
+            .map(s => s.trim().replace(/^[-!]+/, ''))
+            .filter(Boolean);
+          const maxPrice = this.kwForm.max_price !== '' ? Number(this.kwForm.max_price) : null;
+          try {
+            await this.api('/api/keywords', {
+              method: 'POST',
+              body: JSON.stringify({
+                term: this.kwForm.term.trim(),
+                negatives,
+                max_price: maxPrice,
+              }),
+            });
+            this.kwForm = { term: '', negatives: '', max_price: '' };
+            await this.refreshAll();
+            this.notify('Palavra adicionada!');
+          } catch (e) {
+            this.notify('Erro: ' + e.message);
+          }
+        },
+
+        async toggleKeyword(kw) {
+          await this.api(`/api/keywords/${kw.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ enabled: !kw.enabled }),
+          });
+          await this.refreshAll();
+        },
+
+        async deleteKeyword(id) {
+          await this.api(`/api/keywords/${id}`, { method: 'DELETE' });
+          await this.refreshAll();
+          this.notify('Palavra removida');
+        },
+
+        async addBlacklist() {
+          if (!this.newBlacklistWord.trim()) return;
+          try {
+            await this.api('/api/blacklist', {
+              method: 'POST',
+              body: JSON.stringify({ word: this.newBlacklistWord.trim() }),
+            });
+            this.newBlacklistWord = '';
+            await this.refreshAll();
+            this.notify('Adicionado à blacklist global');
+          } catch (e) {
+            this.notify('Erro: ' + e.message);
+          }
+        },
+
+        async deleteBlacklist(word) {
+          await this.api(`/api/blacklist/${encodeURIComponent(word)}`, { method: 'DELETE' });
+          await this.refreshAll();
+          this.notify('Removido da blacklist');
+        },
+
+        async saveRuntimeSettings() {
+          await this.api('/api/settings', {
+            method: 'PATCH',
+            body: JSON.stringify(this.runtimeSettings),
+          });
+          this.notify('Configurações salvas!');
+        },
+
+        async loadDeals() {
+          const params = new URLSearchParams({ limit: '100' });
+          if (this.dealFilter.search) params.set('search', this.dealFilter.search);
+          if (this.dealFilter.category) params.set('category', this.dealFilter.category);
+          if (this.dealFilter.max_price) params.set('max_price', this.dealFilter.max_price);
+          const res = await this.api('/api/deals?' + params.toString());
+          this.deals = res.deals;
+        },
+
+        async loadAnalytics() {
+          const params = new URLSearchParams({ days: String(this.analyticsFilter.days) });
+          if (this.analyticsFilter.term) params.set('term', this.analyticsFilter.term);
+          const [prices, channels] = await Promise.all([
+            this.api('/api/analytics/prices?' + params.toString()),
+            this.api('/api/analytics/channels?days=' + this.analyticsFilter.days),
+          ]);
+          this.priceAnalytics = prices;
+          this.channelRanking = channels.channels;
+          this.$nextTick(() => this.renderChart());
+        },
+
+        renderChart() {
+          const canvas = document.getElementById('priceChart');
+          if (!canvas || typeof Chart === 'undefined') return;
+          if (this.chartInstance) this.chartInstance.destroy();
+          const pts = this.priceAnalytics.points || [];
+          this.chartInstance = new Chart(canvas, {
+            type: 'line',
+            data: {
+              labels: pts.map(p => this.formatDate(p.created_at)),
+              datasets: [{
+                label: 'Preço (R$)',
+                data: pts.map(p => p.price),
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                tension: 0.25,
+                fill: true,
+              }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { labels: { color: '#cbd5e1' } } },
+              scales: {
+                x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
+                y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
+              },
+            },
+          });
+        },
+
+        async loadMultiUser() {
+          const [uRes, cRes] = await Promise.all([
+            this.api('/api/users'),
+            this.api('/api/channels'),
+          ]);
+          this.users = uRes.users;
+          this.channels = cRes.channels.map(c => ({
+            ...c,
+            chat_id: c.chat_id || '',
+            keywordsText: (c.keywords || []).join(', '),
+          }));
+        },
+
+        async toggleUser(u) {
+          await this.api(`/api/users/${u.chat_id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ active: !u.active }),
+          });
+          await this.loadMultiUser();
+        },
+
+        async updateUserLimit(u, val) {
+          await this.api(`/api/users/${u.chat_id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ max_terms: Number(val) }),
+          });
+          this.notify('Limite atualizado');
+        },
+
+        async deleteUserTerm(chatId, termId) {
+          await this.api(`/api/users/${chatId}/terms/${termId}`, { method: 'DELETE' });
+          await this.loadMultiUser();
+        },
+
+        async saveChannel(ch) {
+          const keywords = ch.keywordsText.split(',').map(s => s.trim()).filter(Boolean);
+          await this.api(`/api/channels/${ch.slug}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              chat_id: ch.chat_id.trim(),
+              enabled: ch.enabled,
+              keywords,
+            }),
+          });
+          this.notify(`Canal "${ch.name}" salvo!`);
+          await this.loadMultiUser();
+        },
+
+        formatUptime(sec) {
+          const s = Number(sec || 0);
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          return h > 0 ? `${h}h ${m}m` : `${m}m`;
+        },
+
+        formatDate(iso) {
+          if (!iso) return '';
+          try {
+            return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+          } catch {
+            return iso;
+          }
+        },
+      };
+    }
+  </script>
+</body>
+</html>

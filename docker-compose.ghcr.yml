@@ -1,0 +1,14 @@
+services:
+  telegram-deal-bot:
+    image: ghcr.io/pexinn/botofbots:latest
+    container_name: telegram-deal-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "${WEB_PORT:-8086}:8086"
+    volumes:
+      - ./data:/app/data
+      - ./keywords.txt:/app/keywords.txt
