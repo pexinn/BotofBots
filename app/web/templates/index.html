@@ -14,6 +14,10 @@
   <meta name="apple-mobile-web-app-title" content="Bot of Bots" />
   <script>
     (function() {
+      if (window.location.pathname === '/bot') {
+        window.location.replace('/bot/' + window.location.search + window.location.hash);
+        return;
+      }
       var t = localStorage.getItem('botofbots_theme') || 'dark';
       if (['dark', 'medium', 'light'].indexOf(t) === -1) t = 'dark';
       document.documentElement.dataset.theme = t;
@@ -839,10 +843,10 @@
           });
 
           const params = new URLSearchParams(window.location.search);
-          if (window.location.pathname === '/guia' || window.location.hash === '#guia' || params.get('tab') === 'guide') {
+          if (window.location.pathname.endsWith('/guia') || window.location.pathname.endsWith('/guia/') || window.location.hash === '#guia' || params.get('tab') === 'guide') {
             this.tab = 'guide';
           }
-          const authRes = await fetch('/api/auth/status').then(r => r.json());
+          const authRes = await fetch(this.apiUrl('/api/auth/status')).then(r => r.json());
           this.authRequired = authRes.auth_required;
           this.needsLogin = authRes.auth_required && !authRes.authenticated;
           if (!this.needsLogin) {
@@ -873,13 +877,22 @@
           this.canInstall = false;
         },
 
+        basePath() {
+          const p = window.location.pathname.replace(/\/guia\/?$/, '/');
+          return p.endsWith('/') ? p : (p + '/');
+        },
+
+        apiUrl(path) {
+          return this.basePath() + String(path).replace(/^\/+/, '');
+        },
+
         notify(msg) {
           this.toast = msg;
           setTimeout(() => { if (this.toast === msg) this.toast = ''; }, 3000);
         },
 
         async api(url, opts = {}) {
-          const res = await fetch(url, {
+          const res = await fetch(this.apiUrl(url), {
             headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
             ...opts,
           });
@@ -908,7 +921,7 @@
         },
 
         async doLogout() {
-          await fetch('/api/logout', { method: 'POST' });
+          await fetch(this.apiUrl('/api/logout'), { method: 'POST' });
           this.needsLogin = true;
         },
 

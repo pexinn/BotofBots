@@ -216,4 +216,6 @@ def test_pwa_manifest_icons_sw_and_themes(tmp_path):
     assert "setTheme('light')" in html_res
     assert "setTheme('medium')" in html_res
     assert "setTheme('dark')" in html_res
+    assert "apiUrl(" in html_res
+    assert "fetch('/api/" not in html_res
     db.close()
