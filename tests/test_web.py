@@ -171,3 +171,49 @@ def test_web_dashboard_password_auth(tmp_path):
     assert login_res.status_code == 200
     assert client.get("/api/status").status_code == 200
     db.close()
+
+
+def test_pwa_manifest_icons_sw_and_themes(tmp_path):
+    import struct
+
+    cfg = _make_settings(tmp_path, web_password="secret-password")
+    db = Database(cfg.db_path)
+    sync = KeywordsSyncManager(db, cfg.keywords_file, cfg.keywords_example_file)
+    app = create_app(db, sync, cfg)
+    client = TestClient(app)
+
+    # PWA endpoints must be accessible without auth so Chrome Android can inspect manifest & icons
+    m_res = client.get("/manifest.json")
+    assert m_res.status_code == 200
+    manifest = m_res.json()
+    assert manifest["display"] == "standalone"
+    assert manifest["start_url"] == "./"
+    assert manifest["scope"] == "./"
+    purposes = {(ic["sizes"], ic["purpose"]) for ic in manifest["icons"]}
+    assert ("192x192", "any") in purposes
+    assert ("192x192", "maskable") in purposes
+    assert ("512x512", "any") in purposes
+    assert ("512x512", "maskable") in purposes
+
+    sw_res = client.get("/sw.js")
+    assert sw_res.status_code == 200
+    assert "fetch(event.request)" in sw_res.text
+
+    assert client.get("/favicon.svg").status_code == 200
+    assert client.get("/favicon.ico").status_code == 200
+
+    for url, expected_dim in [("/pwa-192x192.png", 192), ("/pwa-512x512.png", 512)]:
+        res = client.get(url)
+        assert res.status_code == 200
+        assert res.content[:8] == b"\x89PNG\r\n\x1a\n"
+        w, h = struct.unpack("!II", res.content[16:24])
+        assert (w, h) == (expected_dim, expected_dim)
+
+    html_res = client.get("/").text
+    assert "./manifest.json" in html_res
+    assert "./sw.js" in html_res
+    assert "./favicon.svg" in html_res
+    assert "setTheme('light')" in html_res
+    assert "setTheme('medium')" in html_res
+    assert "setTheme('dark')" in html_res
+    db.close()

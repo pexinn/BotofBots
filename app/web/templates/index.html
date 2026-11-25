@@ -1,13 +1,88 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bot of Bots — Painel de Ofertas</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./pwa-192x192.png" />
+  <link rel="apple-touch-icon" href="./pwa-192x192.png" />
+  <meta name="theme-color" content="#0f172a" id="theme-color-meta" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Bot of Bots" />
+  <script>
+    (function() {
+      var t = localStorage.getItem('botofbots_theme') || 'dark';
+      if (['dark', 'medium', 'light'].indexOf(t) === -1) t = 'dark';
+      document.documentElement.dataset.theme = t;
+      var meta = document.getElementById('theme-color-meta');
+      if (meta) meta.setAttribute('content', t === 'light' ? '#f1f5f9' : (t === 'medium' ? '#243042' : '#0f172a'));
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <style>[x-cloak] { display: none !important; }</style>
+  <style>
+    [x-cloak] { display: none !important; }
+
+    /* Tema Médio (Twilight Slate - conforto visual) */
+    :root[data-theme="medium"] body,
+    :root[data-theme="medium"] .bg-slate-950 { background-color: #243042 !important; color: #f1f5f9; }
+    :root[data-theme="medium"] .bg-slate-900 { background-color: #303f54 !important; }
+    :root[data-theme="medium"] .bg-slate-900\/60 { background-color: rgba(48, 63, 84, 0.85) !important; }
+    :root[data-theme="medium"] .bg-slate-950\/60,
+    :root[data-theme="medium"] .bg-slate-950\/40,
+    :root[data-theme="medium"] .bg-slate-950\/90,
+    :root[data-theme="medium"] .bg-slate-950\/80 { background-color: rgba(30, 41, 59, 0.85) !important; }
+    :root[data-theme="medium"] .bg-slate-800 { background-color: #41536d !important; }
+    :root[data-theme="medium"] .hover\:bg-slate-800:hover,
+    :root[data-theme="medium"] .hover\:bg-slate-700:hover { background-color: #4d6280 !important; }
+    :root[data-theme="medium"] .border-slate-800,
+    :root[data-theme="medium"] .border-slate-800\/80,
+    :root[data-theme="medium"] .border-slate-800\/70,
+    :root[data-theme="medium"] .border-slate-700 { border-color: #4b5e7a !important; }
+    :root[data-theme="medium"] .text-slate-400 { color: #cbd5e1 !important; }
+    :root[data-theme="medium"] .text-slate-500 { color: #94a3b8 !important; }
+
+    /* Tema Claro (Daylight) */
+    :root[data-theme="light"] body { background-color: #f1f5f9 !important; color: #0f172a !important; }
+    :root[data-theme="light"] .bg-slate-950 { background-color: #f8fafc !important; }
+    :root[data-theme="light"] .bg-slate-900 { background-color: #ffffff !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05); }
+    :root[data-theme="light"] .bg-slate-900\/60 { background-color: rgba(255, 255, 255, 0.9) !important; }
+    :root[data-theme="light"] .bg-slate-950\/60,
+    :root[data-theme="light"] .bg-slate-950\/40 { background-color: #f1f5f9 !important; }
+    :root[data-theme="light"] .bg-slate-950\/90,
+    :root[data-theme="light"] .bg-slate-950\/80 { background-color: rgba(15, 23, 42, 0.45) !important; }
+    :root[data-theme="light"] .bg-slate-800 { background-color: #e2e8f0 !important; color: #1e293b !important; }
+    :root[data-theme="light"] .hover\:bg-slate-800:hover,
+    :root[data-theme="light"] .hover\:bg-slate-700:hover { background-color: #cbd5e1 !important; }
+    :root[data-theme="light"] .hover\:bg-slate-800\/30:hover { background-color: rgba(226, 232, 240, 0.5) !important; }
+    :root[data-theme="light"] .border-slate-800,
+    :root[data-theme="light"] .border-slate-800\/80,
+    :root[data-theme="light"] .border-slate-800\/70,
+    :root[data-theme="light"] .border-slate-700 { border-color: #cbd5e1 !important; }
+    :root[data-theme="light"] .divide-slate-800\/70 > :not([hidden]) ~ :not([hidden]),
+    :root[data-theme="light"] .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) { border-color: #e2e8f0 !important; }
+    :root[data-theme="light"] .text-white:not([class*="bg-indigo-600"]):not([class*="bg-emerald-600"]):not([class*="bg-amber-600"]):not([class*="bg-rose-600"]) { color: #0f172a !important; }
+    :root[data-theme="light"] .text-slate-100,
+    :root[data-theme="light"] .text-slate-200 { color: #1e293b !important; }
+    :root[data-theme="light"] .text-slate-300 { color: #334155 !important; }
+    :root[data-theme="light"] .text-slate-400 { color: #475569 !important; }
+    :root[data-theme="light"] .text-slate-500 { color: #64748b !important; }
+    :root[data-theme="light"] .text-emerald-300,
+    :root[data-theme="light"] .text-emerald-400 { color: #047857 !important; }
+    :root[data-theme="light"] .text-rose-300,
+    :root[data-theme="light"] .text-rose-400 { color: #be123c !important; }
+    :root[data-theme="light"] .text-amber-300,
+    :root[data-theme="light"] .text-amber-400 { color: #b45309 !important; }
+    :root[data-theme="light"] .text-indigo-300,
+    :root[data-theme="light"] .text-indigo-400 { color: #4338ca !important; }
+    :root[data-theme="light"] input,
+    :root[data-theme="light"] textarea,
+    :root[data-theme="light"] select { color: #0f172a !important; }
+  </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen antialiased" x-data="dashboard()" x-init="init()">
 
@@ -31,7 +106,7 @@
   <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-xl">🤖</div>
+        <img src="./favicon.svg" alt="Bot of Bots" class="h-10 w-10 rounded-xl shadow-md shrink-0" />
         <div>
           <div class="flex items-center gap-2">
             <h1 class="text-lg font-bold tracking-tight text-white">Bot of Bots</h1>
@@ -46,7 +121,23 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Theme Switcher: Claro / Médio / Escuro -->
+        <div class="inline-flex items-center rounded-lg bg-slate-800 p-0.5 border border-slate-700" role="group" aria-label="Tema da interface">
+          <button type="button" @click="setTheme('light')"
+                  :class="theme === 'light' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'"
+                  class="px-2 py-1 rounded-md text-[11px] font-medium transition" title="Tema Claro">☀️ Claro</button>
+          <button type="button" @click="setTheme('medium')"
+                  :class="theme === 'medium' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'"
+                  class="px-2 py-1 rounded-md text-[11px] font-medium transition" title="Tema Médio">🌗 Médio</button>
+          <button type="button" @click="setTheme('dark')"
+                  :class="theme === 'dark' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'"
+                  class="px-2 py-1 rounded-md text-[11px] font-medium transition" title="Tema Escuro">🌙 Escuro</button>
+        </div>
+        <button x-show="canInstall" x-cloak @click="installPwa()"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">
+          📲 Instalar App
+        </button>
         <button @click="togglePause()"
                 :class="status.paused ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'"
                 class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition">
@@ -691,6 +782,9 @@
     function dashboard() {
       return {
         tab: 'keywords',
+        theme: localStorage.getItem('botofbots_theme') || 'dark',
+        canInstall: false,
+        deferredInstallPrompt: null,
         authRequired: false,
         needsLogin: false,
         loginPassword: '',
@@ -732,6 +826,18 @@
         chartInstance: null,
 
         async init() {
+          this.setTheme(this.theme, false);
+          window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            this.deferredInstallPrompt = e;
+            this.canInstall = true;
+          });
+          window.addEventListener('appinstalled', () => {
+            this.canInstall = false;
+            this.deferredInstallPrompt = null;
+            this.notify('App instalado com sucesso!');
+          });
+
           const params = new URLSearchParams(window.location.search);
           if (window.location.pathname === '/guia' || window.location.hash === '#guia' || params.get('tab') === 'guide') {
             this.tab = 'guide';
@@ -743,6 +849,28 @@
             await this.refreshAll();
             if (this.tab === 'guide') await this.runSimulation();
           }
+        },
+
+        setTheme(mode, reRender = true) {
+          const allowed = ['light', 'medium', 'dark'];
+          this.theme = allowed.includes(mode) ? mode : 'dark';
+          document.documentElement.dataset.theme = this.theme;
+          localStorage.setItem('botofbots_theme', this.theme);
+          const meta = document.getElementById('theme-color-meta');
+          if (meta) {
+            meta.setAttribute('content', this.theme === 'light' ? '#f1f5f9' : (this.theme === 'medium' ? '#243042' : '#0f172a'));
+          }
+          if (reRender && this.tab === 'analytics') {
+            this.$nextTick(() => this.renderChart());
+          }
+        },
+
+        async installPwa() {
+          if (!this.deferredInstallPrompt) return;
+          this.deferredInstallPrompt.prompt();
+          await this.deferredInstallPrompt.userChoice;
+          this.deferredInstallPrompt = null;
+          this.canInstall = false;
         },
 
         notify(msg) {
@@ -1003,6 +1131,9 @@
           if (!canvas || typeof Chart === 'undefined') return;
           if (this.chartInstance) this.chartInstance.destroy();
           const pts = this.priceAnalytics.points || [];
+          const tickColor = this.theme === 'light' ? '#475569' : '#94a3b8';
+          const legendColor = this.theme === 'light' ? '#1e293b' : '#cbd5e1';
+          const gridColor = this.theme === 'light' ? 'rgba(15,23,42,0.08)' : 'rgba(148,163,184,0.12)';
           this.chartInstance = new Chart(canvas, {
             type: 'line',
             data: {
@@ -1019,10 +1150,10 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#cbd5e1' } } },
+              plugins: { legend: { labels: { color: legendColor } } },
               scales: {
-                x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
-                y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
+                x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+                y: { ticks: { color: tickColor }, grid: { color: gridColor } },
               },
             },
           });
@@ -1092,6 +1223,12 @@
           }
         },
       };
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
     }
   </script>
 </body>

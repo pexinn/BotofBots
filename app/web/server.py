@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.categories import detect_category_name
@@ -28,6 +28,7 @@ from app.rules import (
 
 
 _TEMPLATE_PATH = Path(__file__).parent / "templates" / "index.html"
+_STATIC_DIR = Path(__file__).parent / "static"
 _COOKIE_NAME = "botofbots_session"
 
 
@@ -123,6 +124,38 @@ def create_app(
         if not _TEMPLATE_PATH.exists():
             return HTMLResponse("<h1>Dashboard template not found</h1>", status_code=500)
         return HTMLResponse(_TEMPLATE_PATH.read_text(encoding="utf-8"))
+
+    @app.get("/manifest.json")
+    async def pwa_manifest() -> FileResponse:
+        return FileResponse(
+            _STATIC_DIR / "manifest.json",
+            media_type="application/json",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/sw.js")
+    async def pwa_service_worker() -> FileResponse:
+        return FileResponse(
+            _STATIC_DIR / "sw.js",
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/pwa-192x192.png")
+    async def pwa_icon_192() -> FileResponse:
+        return FileResponse(_STATIC_DIR / "pwa-192x192.png", media_type="image/png")
+
+    @app.get("/pwa-512x512.png")
+    async def pwa_icon_512() -> FileResponse:
+        return FileResponse(_STATIC_DIR / "pwa-512x512.png", media_type="image/png")
+
+    @app.get("/favicon.svg")
+    async def favicon_svg() -> FileResponse:
+        return FileResponse(_STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
+    @app.get("/favicon.ico")
+    async def favicon_ico() -> FileResponse:
+        return FileResponse(_STATIC_DIR / "pwa-192x192.png", media_type="image/png")
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
