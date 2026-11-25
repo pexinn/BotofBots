@@ -141,3 +141,13 @@ def test_deals_schema_migration_preserves_rows(tmp_path):
     assert len(blocked) == 1
     assert blocked[0]["status"] == "blocked_dedup"
     db.close()
+
+
+def test_today_str_uses_brasilia_timezone(monkeypatch):
+    from app.database import _today_str
+
+    monkeypatch.setenv("TZ", "America/Sao_Paulo")
+    # 21:05 BRT on 2026-11-24 == 00:05 UTC on 2026-11-25 -> still 2026-11-24 locally
+    assert _today_str(datetime(2026, 11, 25, 0, 5, tzinfo=timezone.utc)) == "2026-11-24"
+    # 00:05 BRT on 2026-11-25 == 03:05 UTC on 2026-11-25 -> rolls over at 00:00 BRT
+    assert _today_str(datetime(2026, 11, 25, 3, 5, tzinfo=timezone.utc)) == "2026-11-25"

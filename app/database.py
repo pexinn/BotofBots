@@ -8,9 +8,18 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.categories import DEFAULT_THEMATIC_CATEGORIES
 from app.rules import format_rule_line, parse_rule
+
+
+def _local_tz() -> ZoneInfo | timezone:
+    tz_name = (os.getenv("TZ") or "America/Sao_Paulo").strip()
+    try:
+        return ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        return timezone(timedelta(hours=-3))
 
 
 def _utc_now() -> datetime:
@@ -22,8 +31,9 @@ def _utc_iso(dt: datetime | None = None) -> str:
     return target.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _today_str() -> str:
-    return _utc_now().strftime("%Y-%m-%d")
+def _today_str(now: datetime | None = None) -> str:
+    target = now or _utc_now()
+    return target.astimezone(_local_tz()).strftime("%Y-%m-%d")
 
 
 class Database:

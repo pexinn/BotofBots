@@ -89,7 +89,8 @@
         <p class="text-[11px] text-slate-500 mt-1">
           Marca: <span x-text="status.today?.blacklist_blocked ?? 0"></span> ·
           Preço: <span x-text="status.today?.price_blocked ?? 0"></span> ·
-          Dedup: <span x-text="status.today?.dedup_blocked ?? 0"></span>
+          Dedup: <span x-text="status.today?.dedup_blocked ?? 0"></span> ·
+          <span class="text-slate-400">Total: <span x-text="(status.totals?.blacklist_blocked ?? 0) + (status.totals?.price_blocked ?? 0) + (status.totals?.dedup_blocked ?? 0)"></span></span>
         </p>
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
