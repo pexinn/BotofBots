@@ -172,13 +172,50 @@ def create_app(
             "authenticated": _is_authenticated(request),
         }
 
+    _LOGIN_MAX_ATTEMPTS = 5
+    _LOGIN_WINDOW_SECONDS = 300.0
+    _LOGIN_LOCKOUT_SECONDS = 300.0
+    _failed_attempts: dict[str, list[float]] = {}
+    _locked_until: dict[str, float] = {}
+
+    def _client_ip(request: Request) -> str:
+        xff = request.headers.get("X-Forwarded-For", "").strip()
+        if xff:
+            return xff.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
     @app.post("/api/login")
-    async def login(payload: LoginPayload, response: Response) -> dict[str, bool]:
+    async def login(payload: LoginPayload, request: Request, response: Response) -> dict[str, bool]:
         pwd = settings.web_password.strip()
         if not pwd:
             return {"ok": True}
+
+        ip = _client_ip(request)
+        now = time.monotonic()
+        locked_until = _locked_until.get(ip, 0.0)
+        if now < locked_until:
+            remaining = max(1, int(locked_until - now))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Muitas tentativas incorretas. Tente novamente em {remaining}s.",
+                headers={"Retry-After": str(remaining)},
+            )
+
         if not hmac.compare_digest(payload.password, pwd):
+            recent = [
+                ts for ts in _failed_attempts.get(ip, [])
+                if now - ts <= _LOGIN_WINDOW_SECONDS
+            ]
+            recent.append(now)
+            if len(recent) >= _LOGIN_MAX_ATTEMPTS:
+                _locked_until[ip] = now + _LOGIN_LOCKOUT_SECONDS
+                _failed_attempts.pop(ip, None)
+            else:
+                _failed_attempts[ip] = recent
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Senha inválida")
+
+        _failed_attempts.pop(ip, None)
+        _locked_until.pop(ip, None)
         response.set_cookie(
             key=_COOKIE_NAME,
             value=_session_token(pwd),

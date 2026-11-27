@@ -219,3 +219,29 @@ def test_pwa_manifest_icons_sw_and_themes(tmp_path):
     assert "apiUrl(" in html_res
     assert "fetch('/api/" not in html_res
     db.close()
+
+
+def test_web_login_rate_limiting(tmp_path):
+    cfg = _make_settings(tmp_path, web_password="secret-password")
+    db = Database(cfg.db_path)
+    sync = KeywordsSyncManager(db, cfg.keywords_file, cfg.keywords_example_file)
+    app = create_app(db, sync, cfg)
+    client = TestClient(app)
+
+    for _ in range(5):
+        res = client.post("/api/login", json={"password": "wrong"})
+        assert res.status_code == 401
+
+    # 6th attempt from same IP must be locked out with 429 even with correct password
+    locked = client.post("/api/login", json={"password": "secret-password"})
+    assert locked.status_code == 429
+    assert "Retry-After" in locked.headers
+
+    # Different IP via X-Forwarded-For can still authenticate normally
+    other_ip = client.post(
+        "/api/login",
+        json={"password": "secret-password"},
+        headers={"X-Forwarded-For": "10.0.0.9"},
+    )
+    assert other_ip.status_code == 200
+    db.close()
